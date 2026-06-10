@@ -1,0 +1,17 @@
+# =====================================================================
+# dbt connection profile. Targets the Postgres container.
+# In containers the host is `postgres`; from your laptop it's `localhost`.
+# Override with env vars where useful.
+# =====================================================================
+nhs_ae:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'postgres') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | int }}"
+      user: "{{ env_var('POSTGRES_USER', 'nhs') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'nhs_local_pw') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'nhs_ae') }}"
+      schema: marts          # default schema; staging/intermediate set per-model
+      threads: 4

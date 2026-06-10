@@ -1,0 +1,34 @@
+# =====================================================================
+# NHS A&E Analytics — Python dependencies (ingestion + validation)
+# Versions are indicative (early 2026). Pin exact versions in your
+# lockfile after `pip install`. Bump as needed.
+# =====================================================================
+
+# --- HTTP + scraping (resolve the random-suffix download link) ---
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# --- Excel parsing ---
+pandas==2.2.3
+xlrd==2.0.1          # REQUIRED for legacy .xls (the primary file)
+openpyxl==3.1.5      # for .xlsx (the ECDS supplementary file, V2)
+
+# --- Database ---
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+
+# --- Object storage (MinIO / S3) ---
+boto3==1.35.76
+
+# --- Validation ---
+pandera==0.21.0          # in-DataFrame checks at parse time
+great-expectations==1.3.2  # gate checks at staging/warehouse (Phase 7)
+
+# --- Config / secrets ---
+python-dotenv==1.0.1
+
+# --- Dev / testing (Phase 7, 11) ---
+pytest==8.3.4
+mypy==1.13.0
+ruff==0.8.4

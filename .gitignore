@@ -1,0 +1,37 @@
+# Secrets & local config
+.env
+
+# Data (never commit downloaded files or DB volumes)
+data/raw/*
+data/minio/*
+data/localstack/*
+!data/raw/.gitkeep
+
+# Airflow runtime
+airflow/logs/*
+!airflow/logs/.gitkeep
+
+# dbt artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

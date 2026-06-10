@@ -1,0 +1,4 @@
+# Ingestion image only — avoids great-expectations ↔ pandas pin conflict
+# in the full requirements.txt until Phase 7 validation deps are aligned.
+requests==2.32.3
+python-dotenv==1.0.1
