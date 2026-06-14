@@ -48,7 +48,7 @@ def resolve_timeseries_url() -> ResolvedLink:
         re.IGNORECASE
     )
 
-    for anchor in soup.find_all("a", href="True"):
+    for anchor in soup.find_all("a", href=True):
         text = anchor.get_text(strip=True)
         if pattern.search(text):
             url = anchor["href"]

@@ -17,7 +17,7 @@ def sha256_bytes(data: bytes) -> str:
 def row_hash(values: Iterable[Any]) -> str:
     """Stable hash of a row's business values.
 
-    We join the values with a seperator unlikely to appear in the data, so two
+    We join the values with a separator unlikely to appear in the data, so two
     different rows can't accidentally produce the same string.
     """
     joined = "\x1f".join("" if v is None else str(v) for v in values)
@@ -42,9 +42,9 @@ def with_retries(
                 try:
                     return fn(*args, **kwargs)
                 except exceptions as err: 
-                        last_err = err
-                        delay = base_delay * (2 ** (attempt -1))
-                        log.warning(
+                    last_err = err
+                    delay = base_delay * (2 ** (attempt -1))
+                    log.warning(
                             "%s failed (attempt %d/%d): %s - retrying in %.0fs",
                             fn.__name__,
                             attempt,
@@ -52,8 +52,8 @@ def with_retries(
                             err,
                             delay,
                         )
-                        if attempt < retries:
-                            time.sleep(delay)
+                    if attempt < retries:
+                        time.sleep(delay)
             assert last_err is not None
             raise last_err
         return wrapper
