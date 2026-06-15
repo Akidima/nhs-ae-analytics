@@ -1,5 +1,6 @@
 # Secrets & local config
 .env
+.env.example
 
 # Data (never commit downloaded files or DB volumes)
 data/raw/*
