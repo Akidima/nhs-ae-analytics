@@ -2,3 +2,4 @@
 # in the full requirements.txt until Phase 7 validation deps are aligned.
 requests==2.32.3
 python-dotenv==1.0.1
+beautifulsoup4==4.12.3

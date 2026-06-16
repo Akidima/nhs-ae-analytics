@@ -1,0 +1,99 @@
+# =====================================================================
+# Expected schema for the Monthly A&E Time Series "Activity" sheet.
+# The ingestion parser validates the real file against this before loading.
+#
+# IMPORTANT: `source_label_contains` matches are CASE-INSENSITIVE substring
+# matches against the (flattened) column headers in the live file. NHS England
+# wording drifts over time, so we match on stable fragments, not exact text.
+# Run `python -m ingestion.run --inspect` to print the real headers, then
+# tune these fragments to match. This file is the single source of truth for
+# the mapping (Phase 2 §9).
+# =====================================================================
+schema_version: "2024.01"
+source: "Monthly A&E Sitrep"
+
+# The Sitrep file uses "Code" as the anchor column for Trusts
+sheet_anchor_column: "Code"
+preferred_sheet_name_contains: ["provider", "activity", "data"]
+
+drift_policy:
+  # Changed to warn_and_continue since Sitrep files lack a 'period' column in the grid
+  on_missing_required_column: warn_and_continue
+  on_unexpected_new_column: warn_and_continue
+  on_renamed_column: fuzzy_match_then_alert
+
+columns:
+  # --- identity ---
+  # Note: We removed 'period' because it doesn't exist in the Sitrep tabular data.
+  # Your pipeline likely injects the date from the filename/metadata later.
+  - maps_to: org_code
+    source_label_contains: "^code$"
+    dtype: text
+    required: true
+  - maps_to: org_name
+    source_label_contains: "^name$"
+    dtype: text
+    required: true
+
+  # --- attendances ---
+  # We use regex negative lookaheads (?![.]) to match the base column and ignore the .1/.2 duplicates
+  - maps_to: attendances_type1
+    source_label_contains: "a&e attendances :: type 1"
+    dtype: integer
+    required: true
+  - maps_to: attendances_type2
+    source_label_contains: "a&e attendances :: type 2"
+    dtype: integer
+    required: false
+  - maps_to: attendances_type3
+    source_label_contains: "a&e attendances :: type 3"
+    dtype: integer
+    required: false
+  - maps_to: attendances_total
+    source_label_contains: "a&e attendances :: total attendances"   # was drifting
+    dtype: integer
+    required: false
+
+  # breaches = OVER 4 hours, not under
+  - maps_to: breaches_type1
+    source_label_contains: "greater than 4 hours.*:: type 1"        # was matching 'less than'
+    dtype: integer
+    required: false
+  - maps_to: breaches_total
+    source_label_contains: "greater than 4 hours.*total attendances > 4"
+    dtype: integer
+    required: false
+
+  # --- performance ---
+  - maps_to: performance_all_pct
+    source_label_contains: "percentage in 4 hours or less [(]all[)]"
+    dtype: percent
+    required: false
+
+  # --- emergency admissions ---
+  - maps_to: emergency_admissions_type1
+    source_label_contains: "emergency admissions via type 1"
+    dtype: integer
+    required: false
+  - maps_to: emergency_admissions_via_ae
+    source_label_contains: "total emergency admissions via"
+    dtype: integer
+    required: false
+  - maps_to: emergency_admissions_other
+    source_label_contains: "other emergency admissions"
+    dtype: integer
+    required: false
+  - maps_to: emergency_admissions_total
+    source_label_contains: "total emergency admissions$"
+    dtype: integer
+    required: false
+
+  # --- decision-to-admit waits ---
+  - maps_to: dta_breaches_4hr
+    source_label_contains: ">4 hours from decision"
+    dtype: integer
+    required: false
+  - maps_to: dta_breaches_12hr
+    source_label_contains: ">12 hours from decision"
+    dtype: integer
+    required: false

@@ -35,7 +35,7 @@ def _read_workbook(content: bytes) -> dict[str, pd.DataFrame]:
         bio.seek(0)
         return pd.read_excel(bio, sheet_name=None, header=None, engine="openpyxl")
 
-def inspect(content: bytes, max_rows:int = 8) -> str:
+def inspect(content: bytes, max_rows:int = 25) -> str:
     """Human-readable dump of sheets and their first rows (for '--inspect')."""
     sheets = _read_workbook(content)
     out = [f"Workbook has {len(sheets)} sheet(s):"]
@@ -64,16 +64,74 @@ def _find_header_row(df: pd.DataFrame, anchor: str) -> int:
         "Run with --inspect and check the registry's sheet_anchor_column"
     )
 
-def _coerce(series: pd.Series, dtype: str) -> pd.Series:
+def _build_compound_labels(raw: pd.DataFrame, header_row: int) -> list[str]:
+    """Combine the banner row (header_row-1) with the label row (header_row).
+
+    NHS uses a two-row header: a group banner ('A&E attendances',
+    'A&E attendances less than 4 hours...', 'Emergency Admissions') sitting
+    above repeated sub-labels ('Type 1 Departments - Major A&E', etc).
+    The banner spans merged cells, so it only appears in the first column of
+    its group and is NaN across the rest — we forward-fill it.
+    """
+    banner_raw = raw.iloc[header_row - 1].tolist()
+    label_raw = raw.iloc[header_row].tolist()
+
+    # forward-fill the banner across its merged span
+    banner: list[str] = []
+    last = ""
+    for v in banner_raw:
+        s = "" if pd.isna(v) else re.sub(r"\s+", " ", str(v).strip())
+        if s:
+            last = s
+        banner.append(last)
+
+    labels: list[str] = []
+    for b, l in zip(banner, label_raw):
+        lbl = "" if pd.isna(l) else re.sub(r"\s+", " ", str(l).strip())
+        # compound only when there's a sub-label; bare identity cols (Code/Region/Name) stay as-is
+        if lbl and b and lbl.lower() not in ("code", "region", "name"):
+            labels.append(f"{b} :: {lbl}")
+        else:
+            labels.append(lbl or b)
+    return labels
+
+def _coerce(series, dtype):
+    if isinstance(series, pd.DataFrame):
+        series = series.iloc[:, 0]
+
     if dtype == "integer":
         return pd.to_numeric(series, errors="coerce").astype("Int64")
     if dtype == "percent":
-        num = pd.to_numeric(series, errors="coerce")
-        # normalise 0-1 fractions to 0-100
-        return (num * 100).where(num <= 1, num).round(2)
-    if dtype == "date":
-        return pd.to_datetime(series, errors="coerce", dayfirst=True)
-    return series.astype("string").str.strip()
+        # NHS stores these as 0–1 fractions or '-' placeholders
+        return pd.to_numeric(series, errors="coerce")
+    if dtype == "text":
+        s = series.astype("string")
+        return s.where(s.notna() & (s.str.strip() != ""), other=pd.NA)
+    # fallback: leave as-is rather than nuking to None
+    return series
+    # ... (leave the rest of your existing code exactly as is) ...
+
+
+_MONTH_RX = re.compile(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+'?(\d{2,4})", re.I)
+
+def extract_period(content: bytes, registry: Registry) -> pd.Timestamp | None:
+    """Read the 'Period:' value (e.g. 'May 26') from the metadata block."""
+    sheets = _read_workbook(content)
+    sheet = sheets[_pick_sheet(sheets, registry)]
+    for i in range(min(len(sheet), 14)):          # metadata block is rows 0–13
+        row = [str(v).strip().lower() for v in sheet.iloc[i].tolist()]
+        for j, cell in enumerate(row):
+            if cell.startswith("period"):
+                for v in sheet.iloc[i].tolist()[j+1:]:
+                    if pd.isna(v) or not str(v).strip():
+                        continue
+                    m = _MONTH_RX.search(str(v))
+                    if m:
+                        mon, yr = m.group(1), m.group(2)
+                        yr = int(yr) + 2000 if len(yr) == 2 else int(yr)
+                        return pd.Timestamp(f"{yr}-{mon.title()}-01") \
+                                 .to_period("M").to_timestamp()
+    return None
 
 def parse(content: bytes, registry: Registry) -> tuple[pd.DataFrame, list[str]]:
     """Return (tidy_DataFrame, missing_required_columns)."""
@@ -83,10 +141,7 @@ def parse(content: bytes, registry: Registry) -> tuple[pd.DataFrame, list[str]]:
     log.info("Parsing sheet %r (shape=%s)", sheet_name, raw.shape)
 
     header_row = _find_header_row(raw, registry.anchor_column)
-    labels = [
-        re.sub(r"\s+", " ", str(v).strip())
-        for v in raw.iloc[header_row].tolist()
-    ]
+    labels = _build_compound_labels(raw, header_row)
     body = raw.iloc[header_row + 1:].copy()
     body.columns = labels
 
@@ -103,9 +158,14 @@ def parse(content: bytes, registry: Registry) -> tuple[pd.DataFrame, list[str]]:
     # Drop fully-blank rows and footnote rows [no org_code]
     if "org_code" in tidy.columns:
         tidy = tidy[tidy["org_code"].notna()]
+        # drop the literal '-' aggregate code
+        tidy = tidy[tidy["org_code"].astype(str).str.strip() != "-"]
+        # drop footnote/aggregate rows by code OR name
         tidy = tidy[~tidy["org_code"].astype(str).str.contains(
-            r"note|source|total|england", case=False, na=False
-        )]
+            r"note|source|total|england", case=False, na=False)]
+    if "org_name" in tidy.columns:
+        tidy = tidy[~tidy["org_name"].astype(str).str.contains(
+            r"^england$|^total|^note", case=False, na=False)]
     
     # Coerce dtypes per registry
     dtype_per_name = {c.maps_to: c.dtype for c in registry.columns}
@@ -119,6 +179,5 @@ def parse(content: bytes, registry: Registry) -> tuple[pd.DataFrame, list[str]]:
     tidy = tidy.reset_index(drop=True)
     log.info("Parsed %d data rows, %d columns", len(tidy), tidy.shape[1])
     return tidy, mapping.missing_required
-
 
 

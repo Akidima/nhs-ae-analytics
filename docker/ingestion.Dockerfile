@@ -10,8 +10,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requirements-ingestion.txt .
-RUN pip install --no-cache-dir -r requirements-ingestion.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Code is mounted as a volume in dev (docker-compose); copy for prod builds.
 COPY ingestion/ ./ingestion/

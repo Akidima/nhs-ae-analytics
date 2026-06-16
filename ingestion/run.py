@@ -46,6 +46,15 @@ def run_ingestion(dag_run_id: str | None = None, dry_run: bool = False) -> dict:
         if missing:
             raise RuntimeError(f"Missing required columns: {missing}")
 
+        # 4b. inject period from the metadata block (not present in the grid)
+        period = parser.extract_period(dl.content, registry)
+        if period is None:
+            raise RuntimeError(
+                "Could not extract period from metadata block — check 'Period:' label"
+            )
+        df["period"] = period
+        log.info("Injected period=%s onto %d rows", period.date().isoformat(), len(df))
+
         data_month = (df["period"].max().date().isoformat()
                       if "period" in df.columns and df["period"].notna().any()
                       else None)

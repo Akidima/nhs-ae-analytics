@@ -33,33 +33,67 @@ def _fetch_html(url: str) -> str:
     return resp.text
 
 def resolve_timeseries_url() -> ResolvedLink:
-    """Find the 'Monthly A&E Time Series' link and return its full URL.
-    
-    Raises RuntimeError if no matching link is found. - that means the page
-    layout has changed or the link text has been updated and a human should look (fail loudly, never silently).
-    """
+    """Find the latest Monthly A&E Sitrep XLS link using a two-step process."""
     log.info("Fetching landing page: %s", settings.landing_page_url)
     html = _fetch_html(settings.landing_page_url)
     soup = BeautifulSoup(html, "html.parser")
     
-     # Match the link by its visible text, tolerating spacing/case variations.
+    # HARDCODED SEARCH TEXT to bypass .env prefix issues completely
+    search_text = "Monthly A&E Attendances and Emergency Admissions"
     pattern = re.compile(
-        settings.timeseries_link_text.replace(" ", r"\s+"),
+        search_text.replace(" ", r"\s+"),
         re.IGNORECASE
     )
 
+    category_url = None
+
+    # STEP 1: Find the category page for the current year (e.g., 2026-27)
     for anchor in soup.find_all("a", href=True):
-        text = anchor.get_text(strip=True)
+        text = anchor.get_text(separator=" ", strip=True)
+        text = re.sub(r"\s+", " ", text)
+        
+        # Skip the national aggregate "Time Series" files
+        if "time series" in text.lower():
+            continue
+            
         if pattern.search(text):
-            url = anchor["href"]
-            log.info("Resolved time-series link: %s", url)
+            href = anchor["href"]
+            
+            # If it's already a direct XLS link, just return it (future-proofing)
+            if href.endswith(".xls") or href.endswith(".xlsx"):
+                url = href
+                if url.startswith("/"): url = f"https://www.england.nhs.uk{url}"
+                return ResolvedLink(url=url, link_text=text)
+            
+            # Otherwise, it's a category page. Save it and break.
+            category_url = href
+            if category_url.startswith("/"):
+                category_url = f"https://www.england.nhs.uk{category_url}"
+            elif category_url.startswith("//"):
+                category_url = f"https:{category_url}"
+            break # Take the first match (the newest year)
+
+    if not category_url:
+        raise RuntimeError(f"Could not find the category page for '{search_text}' on {settings.landing_page_url}")
+
+    # STEP 2: Fetch the category page and find the latest XLS download
+    log.info("Fetching category page: %s", category_url)
+    cat_html = _fetch_html(category_url)
+    cat_soup = BeautifulSoup(cat_html, "html.parser")
+
+    for anchor in cat_soup.find_all("a", href=True):
+        href = anchor["href"]
+        text = anchor.get_text(separator=" ", strip=True)
+        
+        # Look specifically for the "Monthly A&E" XLS file.
+        # This ensures we grab the Sitrep and ignore the "ECDS" XLS files on the same page.
+        if ("monthly a&e" in text.lower() or "monthly ae" in text.lower()) and (href.endswith(".xls") or href.endswith(".xlsx")):
+            url = href
+            if url.startswith("/"):
+                url = f"https://www.england.nhs.uk{url}"
+            elif url.startswith("//"):
+                url = f"https:{url}"
+            log.info("Resolved final XLS link: %s", url)
             return ResolvedLink(url=url, link_text=text)
 
-    raise RuntimeError(
-        "Could not find the 'Monthly A & E Time Series' link on "
-        f"{settings.landing_page_url}. The page layout may have changed - "
-        "manual review required."
-    )
-
-     
-    
+    raise RuntimeError(f"Could not find an XLS download link on the category page: {category_url}")

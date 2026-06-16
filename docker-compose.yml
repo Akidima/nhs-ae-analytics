@@ -73,10 +73,10 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # web console
+      - "9000:9000"
+      - "9001:9001"
     volumes:
-      - ./data/minio:/data
+      - miniodata:/data          # was ./data/minio:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -112,7 +112,7 @@ services:
       DEBUG: "0"
       LOCALSTACK_AUTH_TOKEN: ${LOCAL_STACK_AUTH_TOKEN}
     volumes:
-      - ./data/localstack:/var/lib/localstack
+       - localstackdata:/var/lib/localstack
 
   # ------------------------------------------------------------------
   # Airflow: init (db migrate + create admin) → web → scheduler
@@ -196,3 +196,6 @@ services:
 
 volumes:
   pgdata:
+  miniodata:
+  localstackdata:
+

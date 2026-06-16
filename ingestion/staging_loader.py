@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from pathlib import Path
-from ingestion import settings
+from .settings import settings
 import pandas as pd
 from sqlalchemy import create_engine, text
 
@@ -27,10 +27,10 @@ CREATE TABLE IF NOT EXISTS {LANDING_TABLE} (
     period                   DATE,
     org_code                 TEXT,
     org_name                 TEXT,
-    attendance_type1         BIGINT,
-    attendance_type2         BIGINT,
-    attendance_type3         BIGINT,
-    attendance_total         BIGINT,
+    attendances_type1         BIGINT,
+    attendances_type2         BIGINT,
+    attendances_type3         BIGINT,
+    attendances_total         BIGINT,
     breaches_type1           BIGINT,
     breaches_total           BIGINT,
     performance_all_pct      NUMERIC,
@@ -66,10 +66,10 @@ def load(df: pd.DataFrame, *, source_file_name: str, source_file_hash: str, sour
         "period",
         "org_code",
         "org_name",
-        "attendance_type1",
-        "attendance_type2",
-        "attendance_type3",
-        "attendance_total",
+        "attendances_type1",
+        "attendances_type2",
+        "attendances_type3",
+        "attendances_total",
         "breaches_type1",
         "breaches_total",
         "performance_all_pct",
@@ -88,23 +88,30 @@ def load(df: pd.DataFrame, *, source_file_name: str, source_file_hash: str, sour
     for col in expected_cols:
         if col not in out.columns:
             out[col] = pd.NA
-        out = out[expected_cols]
-    
-    # Write to staging table (replace existing data)
-    with engine.begin() as conn:
-       for stmt in _DDL.strip().split(";"):
-           if stmt.strip():
-               conn.execute(text(stmt))
-    conn.execute(text(f"TRUNCATE {LANDING_TABLE}"))
+    out = out[expected_cols]
 
-    out.to_sql(
-        "ae_activity_landing",
-        engine,
-        schema="staging",
-        if_exists="append",
-        index=False,
-        method="multi",
-        chunksize=10000
-    )
+    # dupe guard — check before touching the DB
+    dupes = out.columns[out.columns.duplicated()].tolist()
+    if dupes:
+        raise ValueError(f"Duplicate columns in staging frame: {dupes}")
+
+    period_value = out["period"].iloc[0]
+    with engine.begin() as conn:
+        for stmt in _DDL.strip().split(";"):
+            if stmt.strip():
+                conn.execute(text(stmt))
+        conn.execute(
+            text(f"DELETE FROM {LANDING_TABLE} WHERE period = :p"),
+            {"p": period_value},
+        )
+        out.to_sql(
+            "ae_activity_landing",
+            conn,
+            schema="staging",
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=10000,
+        )
     log.info("Loaded %d rows into %s", len(out), LANDING_TABLE)
     return len(out)
