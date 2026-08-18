@@ -1,0 +1,84 @@
+---
+# Service for PostgreSQL (internal access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: nhs-ae-analytics
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+
+---
+# Service for MinIO API (internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: nhs-ae-analytics
+spec:
+  type: ClusterIP
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+    - name: console
+      port: 9001
+      targetPort: 9001
+      protocol: TCP
+
+---
+# Service for MinIO Console (external access via LoadBalancer or Ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-console
+  namespace: nhs-ae-analytics
+spec:
+  type: LoadBalancer  # Change to ClusterIP and use Ingress in production
+  selector:
+    app: minio
+  ports:
+    - port: 9001
+      targetPort: 9001
+      protocol: TCP
+
+---
+# Service for Airflow Webserver (external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+  namespace: nhs-ae-analytics
+spec:
+  type: LoadBalancer  # Change to ClusterIP and use Ingress in production
+  selector:
+    app: airflow-webserver
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Service for LocalStack (internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: localstack
+  namespace: nhs-ae-analytics
+spec:
+  type: ClusterIP
+  selector:
+    app: localstack
+  ports:
+    - port: 4566
+      targetPort: 4566
+      protocol: TCP

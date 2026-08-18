@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: stg_ae_activity
+    description: >
+      Cleaned, typed view over the landing table. One row per provider per
+      month. Thin by design — ingestion already validated and reconciled.
+    
+    # Model-level tests (apply to the whole table)
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - period
+            - org_code
+
+    # Column-level tests
+    columns:
+      - name: period
+        description: "First-of-month reporting period."
+        tests:
+          - not_null
+
+      - name: org_code
+        description: "NHS provider ODS code (Business Key)."
+        tests:
+          - not_null
+
+      - name: attendances_total
+        description: "Total A&E attendances for the month."
+        tests:
+          - not_null
+
+      - name: within_4hr_total
+        description: >
+          Patients discharged, admitted or transferred within 4 hours.
+          Calculated as: attendances_total - breaches_total. Must be >= 0.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true

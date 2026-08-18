@@ -1,0 +1,272 @@
+---
+# Deployment for Airflow Webserver
+# Code volumes are ConfigMaps created by deploy-k8s.sh (not emptyDir — that hid all code).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+  namespace: nhs-ae-analytics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-webserver
+  template:
+    metadata:
+      labels:
+        app: airflow-webserver
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: airflow-webserver
+        image: apache/airflow:2.9.3-python3.12
+        command: ["airflow", "webserver"]
+        ports:
+        - containerPort: 8080
+        env:
+        - name: AIRFLOW_HOME
+          value: "/opt/airflow"
+        - name: AIRFLOW__CORE__EXECUTOR
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__CORE__EXECUTOR
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__CORE__LOAD_EXAMPLES
+        - name: AIRFLOW__WEBSERVER__EXPOSE_CONFIG
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__WEBSERVER__EXPOSE_CONFIG
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: _AIRFLOW_WWW_USER_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW_WWW_USER_USERNAME
+        - name: _AIRFLOW_WWW_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW_WWW_USER_PASSWORD
+        - name: NHS_AE_DB_URL
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: NHS_AE_DB_URL
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        - name: RAW_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: RAW_BUCKET
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PIP_ADDITIONAL_REQUIREMENTS
+          value: "requests==2.32.3 beautifulsoup4==4.12.3 lxml==5.3.0 pandas==2.2.3 xlrd==2.0.1 openpyxl==3.1.5 SQLAlchemy==2.0.36 psycopg2-binary==2.9.10 boto3==1.35.76 pandera==0.21.0 python-dotenv==1.0.1 PyYAML==6.0.2"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        - name: ingestion-code
+          mountPath: /opt/airflow/ingestion
+        - name: schema-registry
+          mountPath: /opt/airflow/config/schema_registry
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      initContainers:
+      - name: airflow-db-migrate
+        image: apache/airflow:2.9.3-python3.12
+        command:
+        - bash
+        - -c
+        - |
+          airflow db migrate
+          airflow users create \
+            --username "${_AIRFLOW_WWW_USER_USERNAME}" \
+            --password "${_AIRFLOW_WWW_USER_PASSWORD}" \
+            --firstname Admin --lastname User \
+            --role Admin --email admin@example.com || true
+        env:
+        - name: AIRFLOW_HOME
+          value: "/opt/airflow"
+        - name: AIRFLOW__CORE__EXECUTOR
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__CORE__EXECUTOR
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: _AIRFLOW_WWW_USER_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW_WWW_USER_USERNAME
+        - name: _AIRFLOW_WWW_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW_WWW_USER_PASSWORD
+      volumes:
+      - name: airflow-dags
+        configMap:
+          name: airflow-dags
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs-pvc
+      - name: ingestion-code
+        configMap:
+          name: ingestion-code
+      - name: schema-registry
+        configMap:
+          name: schema-registry
+
+---
+# Deployment for Airflow Scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  namespace: nhs-ae-analytics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app: airflow-scheduler
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: airflow-scheduler
+        image: apache/airflow:2.9.3-python3.12
+        command: ["airflow", "scheduler"]
+        env:
+        - name: AIRFLOW_HOME
+          value: "/opt/airflow"
+        - name: AIRFLOW__CORE__EXECUTOR
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__CORE__EXECUTOR
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__CORE__LOAD_EXAMPLES
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          valueFrom:
+            configMapKeyRef:
+              name: airflow-config
+              key: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: NHS_AE_DB_URL
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: NHS_AE_DB_URL
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        - name: RAW_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: RAW_BUCKET
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PIP_ADDITIONAL_REQUIREMENTS
+          value: "requests==2.32.3 beautifulsoup4==4.12.3 lxml==5.3.0 pandas==2.2.3 xlrd==2.0.1 openpyxl==3.1.5 SQLAlchemy==2.0.36 psycopg2-binary==2.9.10 boto3==1.35.76 pandera==0.21.0 python-dotenv==1.0.1 PyYAML==6.0.2"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        - name: ingestion-code
+          mountPath: /opt/airflow/ingestion
+        - name: schema-registry
+          mountPath: /opt/airflow/config/schema_registry
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: airflow-dags
+        configMap:
+          name: airflow-dags
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs-pvc
+      - name: ingestion-code
+        configMap:
+          name: ingestion-code
+      - name: schema-registry
+        configMap:
+          name: schema-registry

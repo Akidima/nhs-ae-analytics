@@ -1,0 +1,46 @@
+---
+# Deployment for LocalStack
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localstack
+  namespace: nhs-ae-analytics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: localstack
+  template:
+    metadata:
+      labels:
+        app: localstack
+    spec:
+      containers:
+      - name: localstack
+        image: localstack/localstack:4.4.0
+        ports:
+        - containerPort: 4566
+        env:
+        - name: SERVICES
+          value: "s3,iam,secretsmanager,sts"
+        - name: DEBUG
+          value: "0"
+        - name: LOCALSTACK_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: LOCALSTACK_AUTH_TOKEN
+        volumeMounts:
+        - name: localstack-storage
+          mountPath: /var/lib/localstack
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: localstack-storage
+        persistentVolumeClaim:
+          claimName: localstack-pvc

@@ -14,7 +14,7 @@ from .settings import settings
 
 log = get_logger(__name__)
 
-_USER_AGENT = "nhs-ae-analytics/1.0 (+portfolio project))"
+_USER_AGENT = "nhs-ae-analytics/1.0 (+portfolio project)"
 
 @dataclass
 class DownloadedFile:

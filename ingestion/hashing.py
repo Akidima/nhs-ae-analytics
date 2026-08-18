@@ -20,7 +20,19 @@ def row_hash(values: Iterable[Any]) -> str:
     We join the values with a separator unlikely to appear in the data, so two
     different rows can't accidentally produce the same string.
     """
-    joined = "\x1f".join("" if v is None else str(v) for v in values)
+    def _norm(v: Any) -> str:
+        # Treat None / NaN / pandas NA as the same empty token so hashes stay stable
+        if v is None:
+            return ""
+        try:
+            import pandas as pd
+            if pd.isna(v):
+                return ""
+        except (TypeError, ValueError):
+            pass
+        return str(v)
+
+    joined = "\x1f".join(_norm(v) for v in values)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 def with_retries(

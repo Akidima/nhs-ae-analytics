@@ -1,6 +1,17 @@
 -- =====================================================================
--- Schemas for the layered architecture (Phase 3 §3)
--- Runs against POSTGRES_DB (nhs_ae) on first init.
+-- NHS A&E Analytics — database schemas
+--
+-- Target database: POSTGRES_DB (nhs_ae)
+--
+-- Layers:
+--   staging      = Silver: typed/cleaned 1:1 source data
+--   intermediate = dbt transformation layer
+--   marts        = Gold: dimensional models and business KPIs
+--   meta         = Pipeline metadata and observability
+--   reference    = Controlled lookup/reference data
+--
+-- This script is executed automatically by the PostgreSQL Docker
+-- entrypoint when the database volume is initialized for the first time.
 -- =====================================================================
 
 CREATE SCHEMA IF NOT EXISTS staging;       -- silver: typed, cleaned source rows

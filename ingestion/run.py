@@ -178,7 +178,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.backfill_web:
         result = run_backfill_web()
         log.info("Result: %s", result)
-        return 0
+        if result.get("status") == "no_files":
+            return 1
+        failed = result.get("processed", 0) - result.get("succeeded", 0)
+        return 1 if failed else 0
 
     if args.inspect:
         _inspect()
