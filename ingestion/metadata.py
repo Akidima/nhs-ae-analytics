@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timezone
+from enum import Enum
 
 import pandas as pd 
 from sqlalchemy import text
@@ -23,6 +24,16 @@ _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 EXCLUDED_HASH_COLUMNS = frozenset({
     "source_file_name", "source_file_hash", "source_url", "ingested_at"
 })
+
+
+class IngestStatus(str, Enum):
+    """Valid ingestion status values for source_file.ingest_status."""
+    PENDING = "pending"
+    LOADING = "loading"
+    LOADED = "loaded"
+    FAILED = "failed"
+    SKIPPED_DUPLICATE = "skipped_duplicate"
+    SKIPPED_UNCHANGED = "skipped_unchanged"
 
 
 def _normalize_data_month(data_month) -> date:
@@ -50,7 +61,9 @@ def already_ingested(engine: Engine, source_name: str, sha256: str) -> bool:
 def record_source_file(engine: Engine, *, source_name: str, filename: str, 
                         url: str, sha256: str, size_bytes: int,
                         schema_version: str, raw_key: str, row_count: int,
-                        data_month: str | date | datetime, status: str) -> int:
+                        data_month: str | date | datetime, status: str | IngestStatus) -> int:
+    if isinstance(status, IngestStatus):
+        status = status.value
     data_month_norm = _normalize_data_month(data_month)
     params = {
         "source_name": source_name,

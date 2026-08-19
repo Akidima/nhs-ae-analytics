@@ -3,7 +3,7 @@
 import pytest
 import pandas as pd
 from ingestion.hashing import row_hash
-from ingestion.metadata import _normalize_data_month
+from ingestion.metadata import _normalize_data_month, IngestStatus
 from datetime import date, datetime
 
 
@@ -43,6 +43,16 @@ def test_normalize_data_month_invalid():
         _normalize_data_month("01-2024")
     with pytest.raises(TypeError):
         _normalize_data_month(12345)
+
+
+def test_ingest_status_enum():
+    """Test IngestStatus enum has expected values."""
+    assert IngestStatus.LOADED.value == "loaded"
+    assert IngestStatus.FAILED.value == "failed"
+    assert IngestStatus.SKIPPED_DUPLICATE.value == "skipped_duplicate"
+    assert IngestStatus.SKIPPED_UNCHANGED.value == "skipped_unchanged"
+    assert IngestStatus.PENDING.value == "pending"
+    assert IngestStatus.LOADING.value == "loading"
 
 
 if __name__ == "__main__":
