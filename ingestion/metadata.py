@@ -5,7 +5,8 @@ answer "did this number change, or did the source change?"
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import re
+from datetime import date, datetime, timezone
 
 import pandas as pd 
 from sqlalchemy import text
@@ -15,6 +16,27 @@ from .hashing import row_hash
 from .logging_setup import get_logger
 
 log = get_logger(__name__)
+
+_MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
+
+# Columns excluded from row hashing (metadata columns)
+EXCLUDED_HASH_COLUMNS = frozenset({
+    "source_file_name", "source_file_hash", "source_url", "ingested_at"
+})
+
+
+def _normalize_data_month(data_month) -> date:
+    """Accept YYYY-MM string, date, or datetime; return first day of month as date."""
+    if isinstance(data_month, date) and not isinstance(data_month, datetime):
+        return data_month.replace(day=1)
+    if isinstance(data_month, datetime):
+        return data_month.date().replace(day=1)
+    if isinstance(data_month, str):
+        if not _MONTH_PATTERN.match(data_month):
+            raise ValueError(f"data_month must be YYYY-MM format, got: {data_month}")
+        year, month = map(int, data_month.split("-"))
+        return date(year, month, 1)
+    raise TypeError(f"data_month must be str (YYYY-MM), date, or datetime; got {type(data_month)}")
 
 def already_ingested(engine: Engine, source_name: str, sha256: str) -> bool:
     """Level-1 change detection: have we already loaded these exact bytes?"""
@@ -28,12 +50,13 @@ def already_ingested(engine: Engine, source_name: str, sha256: str) -> bool:
 def record_source_file(engine: Engine, *, source_name: str, filename: str, 
                         url: str, sha256: str, size_bytes: int,
                         schema_version: str, raw_key: str, row_count: int,
-                        data_month, status: str) -> int:
+                        data_month: str | date | datetime, status: str) -> int:
+    data_month_norm = _normalize_data_month(data_month)
     params = {
         "source_name": source_name,
         "filename": filename,
         "url": url,
-        "data_month": data_month,
+        "data_month": data_month_norm,
         "size": size_bytes,
         "sha256": sha256,
         "schema_version": schema_version,
@@ -78,9 +101,8 @@ def upsert_period_versions(engine: Engine, df: pd.DataFrame,
     if not {"period", "org_code"}.issubset(set(df.columns)):
        return 0
     
-    value_cols = [c for c in df.columns
-                  if c not in ("source_file_name", "source_file_hash",
-                                "source_url", "ingested_at")]
+    # Deterministic column order: sort columns alphabetically for consistent hashing
+    value_cols = sorted(c for c in df.columns if c not in EXCLUDED_HASH_COLUMNS)
     changed = 0
     now = datetime.now(timezone.utc)
 
