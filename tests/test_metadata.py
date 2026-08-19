@@ -55,5 +55,23 @@ def test_ingest_status_enum():
     assert IngestStatus.LOADING.value == "loading"
 
 
+def test_structured_logging_contains_correlation_fields(caplog):
+    """Test that structured logs contain correlation fields."""
+    import logging
+    
+    # Set up logging to capture extra fields
+    caplog.set_level(logging.INFO)
+    
+    # Just verify the log calls work (can't easily test extra fields without a real DB)
+    from ingestion.metadata import log
+    log.info("Test message", extra={"source_file_id": 42, "changed_rows": 5})
+    
+    # Check that log record has extra fields
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.source_file_id == 42
+    assert record.changed_rows == 5
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

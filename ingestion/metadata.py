@@ -49,6 +49,7 @@ def _normalize_data_month(data_month) -> date:
         return date(year, month, 1)
     raise TypeError(f"data_month must be str (YYYY-MM), date, or datetime; got {type(data_month)}")
 
+
 def already_ingested(engine: Engine, source_name: str, sha256: str) -> bool:
     """Level-1 change detection: have we already loaded these exact bytes?"""
     with engine.connect() as conn: 
@@ -57,6 +58,7 @@ def already_ingested(engine: Engine, source_name: str, sha256: str) -> bool:
             {"source_name": source_name, "sha256": sha256}
         ).first()
         return row is not None
+
 
 def record_source_file(engine: Engine, *, source_name: str, filename: str, 
                         url: str, sha256: str, size_bytes: int,
@@ -105,7 +107,17 @@ def record_source_file(engine: Engine, *, source_name: str, filename: str,
             raise RuntimeError(
                 f"Could not resolve source_file_id for {source_name}/{sha256}"
             )
-    return int(sid[0])
+        log.info(
+            "Source file recorded",
+            extra={
+                "source_file_id": int(sid[0]),
+                "source_name": source_name,
+                "filename": filename,
+                "status": status,
+            }
+        )
+        return int(sid[0])
+
 
 def upsert_period_versions(engine: Engine, df: pd.DataFrame,
                             source_file_id: int) -> int:
@@ -174,9 +186,16 @@ def upsert_period_versions(engine: Engine, df: pd.DataFrame,
         """))
         
         changed = insert_result.rowcount
-        log.info("Revision Check: %d (period, provider) rows new/changed (expired: %d)",
-                 changed, expire_result.rowcount)
+        log.info(
+            "Revision check complete",
+            extra={
+                "changed_rows": changed,
+                "source_file_id": source_file_id,
+                "expired_rows": expire_result.rowcount,
+            }
+        )
         return changed
+
 
 def start_run(engine: Engine, dag_run_id: str | None = None) -> int:
     with engine.begin() as conn:
@@ -187,10 +206,11 @@ def start_run(engine: Engine, dag_run_id: str | None = None) -> int:
         ).first()
     return int(rid[0])
 
+
 def finish_run(engine: Engine, run_id: int, *, status: str,
                rows_loaded: int | None = None, notes: str | None = None) -> None:
     with engine.begin() as conn:
-        conn.execute(
+        result = conn.execute(
             text("""UPDATE meta.pipeline_run
                     SET status = :s, finished_at = :f,
                         rows_loaded = :r, notes = :n
@@ -198,4 +218,13 @@ def finish_run(engine: Engine, run_id: int, *, status: str,
             {"s": status, "f": datetime.now(timezone.utc),
              "r": rows_loaded, "n": notes, "id": run_id},
         )
-    
+        if result.rowcount == 0:
+            raise ValueError(f"No pipeline_run found with run_id={run_id}")
+    log.info(
+        "Pipeline run finished",
+        extra={
+            "run_id": run_id,
+            "status": status,
+            "rows_loaded": rows_loaded,
+        }
+    )
