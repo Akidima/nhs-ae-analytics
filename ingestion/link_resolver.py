@@ -8,7 +8,10 @@ we must find the link on the rendered page every run, by its visible text.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
+from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
@@ -20,6 +23,8 @@ from .settings import settings
 log = get_logger(__name__)
 
 _USER_AGENT = "nhs-ae-analytics-ingestion/1.0 (+portfolio-project)"
+_MIN_DELAY_SECONDS = 1.0
+_ROBOTS_CACHE: dict[str, RobotFileParser | None] = {}
 _BACKFILL_YEAR_PAGES = [
     "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/ae-attendances-and-emergency-admissions-2025-26/",
     "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/ae-attendances-and-emergency-admissions-2026-27/",
@@ -43,9 +48,35 @@ class ResolvedLink:
 
 @with_retries(retries=4, exceptions=(requests.RequestException,))
 def _fetch_html(url: str) -> str:
+    if not _can_fetch(url):
+        raise RuntimeError(f"robots.txt disallows fetching {url}")
+    
+    # Polite delay
+    time.sleep(_MIN_DELAY_SECONDS)
+    
     resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=30)
     resp.raise_for_status()
     return resp.text
+
+
+def _can_fetch(url: str) -> bool:
+    """Check robots.txt politely (cached)."""
+    parsed = urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    
+    if base not in _ROBOTS_CACHE:
+        rp = RobotFileParser()
+        try:
+            rp.set_url(f"{base}/robots.txt")
+            rp.read()
+        except Exception:
+            rp = None
+        _ROBOTS_CACHE[base] = rp
+    
+    rp = _ROBOTS_CACHE[base]
+    if rp is None:
+        return True  # Allow if robots.txt unavailable
+    return rp.can_fetch(_USER_AGENT, url)
 
 def _abs_url(href: str) -> str:
     """Normalise a possibly-relative href to an absolute england.nhs.uk URL."""

@@ -89,5 +89,77 @@ def test_discover_year_pages(monkeypatch):
     assert pages == sorted(pages, reverse=True)  # newest first
 
 
+def test_can_fetch_respects_robots_txt(monkeypatch):
+    """Test _can_fetch respects robots.txt."""
+    from ingestion.link_resolver import _can_fetch, _ROBOTS_CACHE
+    
+    # Clear cache
+    _ROBOTS_CACHE.clear()
+    
+    # Mock robots.txt that allows all
+    import ingestion.link_resolver as lr_module
+    from urllib.robotparser import RobotFileParser
+    
+    def mock_read_allowed(self):
+        self.allow_all = True
+        self.disallow_all = False
+    
+    def mock_read_disallowed(self):
+        self.allow_all = False
+        self.disallow_all = True
+    
+    def mock_can_fetch_allowed(self, user_agent, url):
+        return True
+    
+    def mock_can_fetch_disallowed(self, user_agent, url):
+        return False
+    
+    # Test allowed
+    monkeypatch.setattr(RobotFileParser, "read", mock_read_allowed)
+    monkeypatch.setattr(RobotFileParser, "can_fetch", mock_can_fetch_allowed)
+    
+    assert _can_fetch("https://example.com/allowed") is True
+    
+    # Test disallowed
+    _ROBOTS_CACHE.clear()
+    monkeypatch.setattr(RobotFileParser, "read", mock_read_disallowed)
+    monkeypatch.setattr(RobotFileParser, "can_fetch", mock_can_fetch_disallowed)
+    
+    assert _can_fetch("https://example.com/disallowed") is False
+
+
+def test_fetch_html_polite_delay(monkeypatch):
+    """Test _fetch_html includes polite delay."""
+    import ingestion.link_resolver as lr
+    import time
+    
+    original_sleep = time.sleep
+    sleep_called = []
+    
+    def mock_sleep(seconds):
+        sleep_called.append(seconds)
+    
+    monkeypatch.setattr(time, "sleep", mock_sleep)
+    
+    def mock_get(*args, **kwargs):
+        class MockResp:
+            def raise_for_status(self):
+                pass
+            text = "<html></html>"
+        return MockResp()
+    
+    monkeypatch.setattr(lr.requests, "get", mock_get)
+    
+    # Clear robots cache
+    lr._ROBOTS_CACHE.clear()
+    monkeypatch.setattr(lr.RobotFileParser, "read", lambda self: setattr(self, 'allow_all', True) or setattr(self, 'disallow_all', False))
+    monkeypatch.setattr(lr.RobotFileParser, "can_fetch", lambda self, ua, url: True)
+    
+    lr._fetch_html("https://example.com/test")
+    
+    assert len(sleep_called) == 1
+    assert sleep_called[0] >= lr._MIN_DELAY_SECONDS
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
