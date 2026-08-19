@@ -96,54 +96,74 @@ def record_source_file(engine: Engine, *, source_name: str, filename: str,
 
 def upsert_period_versions(engine: Engine, df: pd.DataFrame,
                             source_file_id: int) -> int:
-    """Level-2/3 revision detection via SCD-style row hashing."""
-    # Fixed hyphen to underscore
+    """Level-2/3 revision detection via SCD-style row hashing (batch version)."""
     if not {"period", "org_code"}.issubset(set(df.columns)):
-       return 0
+        return 0
     
     # Deterministic column order: sort columns alphabetically for consistent hashing
     value_cols = sorted(c for c in df.columns if c not in EXCLUDED_HASH_COLUMNS)
-    changed = 0
+    
+    # Prepare records
     now = datetime.now(timezone.utc)
-
+    records = []
+    for _, r in df.iterrows():
+        if pd.isna(r.get("org_code")) or pd.isna(r.get("period")):
+            continue
+        rh = row_hash(r[c] for c in value_cols)
+        records.append({
+            "source_file_id": source_file_id,
+            "period": r["period"],
+            "org_code": str(r["org_code"]),
+            "row_hash": rh,
+        })
+    
+    if not records:
+        return 0
+    
+    # Batch upsert using CTE with temporary table
     with engine.begin() as conn:
-        for _, r in df.iterrows():
-            if pd.isna(r.get("org_code")) or pd.isna(r.get("period")):
-                continue
-            
-            rh = row_hash(r[c] for c in value_cols)
-            
-            # Check if we already have this exact row
-            current = conn.execute(
-                text("""SELECT row_hash FROM meta.period_version
-                        WHERE period = :p AND org_code = :o AND is_current = true"""),
-                {"p": r["period"], "o": str(r["org_code"])}
-            ).first()
-            
-            # If the hash matches, it hasn't changed. Skip it!
-            if current and current[0] == rh:
-                continue  
-                
-            # If it HAS changed, expire the old row!
-            if current:
-                conn.execute(
-                    text("""UPDATE meta.period_version
-                            SET is_current = false, valid_to = :now
-                            WHERE period = :p AND org_code = :o AND is_current = true"""),
-                    {"now": now, "p": r["period"], "o": str(r["org_code"])}
-                )
-                
-            # Insert the brand new row
-            conn.execute(
-                text("""INSERT INTO meta.period_version
-                        (source_file_id, period, org_code, row_hash, is_current)
-                        VALUES (:sid, :p, :o, :rh, true)"""),
-                {"sid": source_file_id, "p": r["period"], "o": str(r["org_code"]), "rh": rh}
-            )
-            changed += 1
-            
-    log.info("Revision Check: %d (period, provider) rows new/changed", changed)
-    return changed
+        # Create temp table with new data
+        conn.execute(text("""
+            CREATE TEMP TABLE tmp_new_versions (
+                source_file_id INTEGER,
+                period TEXT,
+                org_code TEXT,
+                row_hash TEXT
+            ) ON COMMIT DROP
+        """))
+        
+        conn.execute(text("""
+            INSERT INTO tmp_new_versions (source_file_id, period, org_code, row_hash)
+            VALUES (:source_file_id, :period, :org_code, :row_hash)
+        """), records)
+        
+        # Expire changed rows (where hash differs)
+        expire_result = conn.execute(text("""
+            UPDATE meta.period_version pv
+            SET is_current = false, valid_to = :now
+            FROM tmp_new_versions nv
+            WHERE pv.period = nv.period
+              AND pv.org_code = nv.org_code
+              AND pv.is_current = true
+              AND pv.row_hash != nv.row_hash
+        """), {"now": now})
+        
+        # Insert new/changed rows (where no current row exists OR hash differs)
+        insert_result = conn.execute(text("""
+            INSERT INTO meta.period_version (source_file_id, period, org_code, row_hash, is_current)
+            SELECT nv.source_file_id, nv.period, nv.org_code, nv.row_hash, true
+            FROM tmp_new_versions nv
+            LEFT JOIN meta.period_version pv
+              ON pv.period = nv.period
+             AND pv.org_code = nv.org_code
+             AND pv.is_current = true
+            WHERE pv.row_hash IS NULL OR pv.row_hash != nv.row_hash
+        """))
+        
+        changed = insert_result.rowcount
+        log.info("Revision Check: %d (period, provider) rows new/changed (expired: %d)",
+                 changed, expire_result.rowcount)
+        return changed
 
 def start_run(engine: Engine, dag_run_id: str | None = None) -> int:
     with engine.begin() as conn:
