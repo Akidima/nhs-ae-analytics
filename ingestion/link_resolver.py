@@ -118,9 +118,7 @@ def resolve_timeseries_url() -> ResolvedLink:
             
             # If it's already a direct XLS link, just return it (future-proofing)
             if href.endswith(".xls") or href.endswith(".xlsx"):
-                url = href
-                if url.startswith("/"): url = f"https://www.england.nhs.uk{url}"
-                return ResolvedLink(url=url, link_text=text)
+                return ResolvedLink(url=_abs_url(href), link_text=text)
             
             # Otherwise, it's a category page. Save it and break.
             category_url = href
@@ -145,12 +143,7 @@ def resolve_timeseries_url() -> ResolvedLink:
         # Look specifically for the "Monthly A&E" XLS file.
         # This ensures we grab the Sitrep and ignore the "ECDS" XLS files on the same page.
         if ("monthly a&e" in text.lower() or "monthly ae" in text.lower()) and (href.endswith(".xls") or href.endswith(".xlsx")):
-            url = href
-            if url.startswith("/"):
-                url = f"https://www.england.nhs.uk{url}"
-            elif url.startswith("//"):
-                url = f"https:{url}"
-            log.info("Resolved final XLS link: %s", url)
-            return ResolvedLink(url=url, link_text=text)
+            log.info("Resolved final XLS link: %s", _abs_url(href))
+            return ResolvedLink(url=_abs_url(href), link_text=text)
 
     raise RuntimeError(f"Could not find an XLS download link on the category page: {category_url}")
