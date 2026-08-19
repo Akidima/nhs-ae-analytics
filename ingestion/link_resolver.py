@@ -30,6 +30,12 @@ _CATEGORY_PAGE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in settings.catego
 _XLS_LINK_PATTERNS = [re.compile(p, re.IGNORECASE) for p in settings.xls_link_patterns]
 _EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in settings.exclude_patterns]
 
+# Pattern to discover year pages from landing page
+_YEAR_PAGE_PATTERN = re.compile(
+    r"ae-attendances-and-emergency-admissions-\d{4}-\d{2}",
+    re.IGNORECASE
+)
+
 @dataclass
 class ResolvedLink:
     url: str
@@ -49,6 +55,24 @@ def _abs_url(href: str) -> str:
         return f"https://www.england.nhs.uk{href}"
     return href
 
+
+def discover_year_pages(landing_url: str | None = None) -> list[str]:
+    """Find all 'ae-attendances-and-emergency-admissions-YYYY-YY' links on landing page."""
+    url = landing_url or settings.landing_page_url
+    html = _fetch_html(url)
+    soup = BeautifulSoup(html, "html.parser")
+    
+    pages: list[str] = []
+    for anchor in soup.find_all("a", href=True):
+        href = anchor["href"]
+        if _YEAR_PAGE_PATTERN.search(href):
+            pages.append(_abs_url(href))
+    
+    # Deduplicate and sort newest first (assuming YYYY-YY in URL)
+    pages = sorted(set(pages), reverse=True)
+    log.info("Discovered %d year pages: %s", len(pages), pages)
+    return pages
+
 def resolve_backfill_urls(year_pages: list[str] | None = None) -> list[ResolvedLink]:
     """Find every Monthly A&E provider XLS across the given year-pages.
 
@@ -56,7 +80,7 @@ def resolve_backfill_urls(year_pages: list[str] | None = None) -> list[ResolvedL
     STEP 2, but collects ALL matches instead of returning the first. Used by
     the backfill runner to ingest a full year of history in one command.
     """
-    pages = year_pages or _BACKFILL_YEAR_PAGES
+    pages = year_pages or discover_year_pages()
     found: list[ResolvedLink] = []
     seen: set[str] = set()
 

@@ -68,5 +68,26 @@ def test_patterns_match_expected_strings():
     assert any(p.search(ecds_text) for p in exclude_patterns)
 
 
+def test_discover_year_pages(monkeypatch):
+    """Test discover_year_pages finds year pages from landing page."""
+    from ingestion.link_resolver import discover_year_pages
+    import ingestion.link_resolver as lr
+    
+    # Load fixture
+    with open("tests/fixtures/landing_page.html") as f:
+        fixture_html = f.read()
+    
+    # Mock _fetch_html to return our fixture
+    def mock_fetch_html(url):
+        return fixture_html
+    
+    monkeypatch.setattr(lr, "_fetch_html", mock_fetch_html)
+    
+    pages = discover_year_pages("https://fake.example.com/landing")
+    assert len(pages) >= 3
+    assert all("ae-attendances-and-emergency-admissions-" in p for p in pages)
+    assert pages == sorted(pages, reverse=True)  # newest first
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
