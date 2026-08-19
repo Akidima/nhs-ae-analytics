@@ -161,5 +161,80 @@ def test_fetch_html_polite_delay(monkeypatch):
     assert sleep_called[0] >= lr._MIN_DELAY_SECONDS
 
 
+def test_previous_year_url():
+    """Test _previous_year_url decrements financial year correctly."""
+    from ingestion.link_resolver import _previous_year_url
+    
+    # Standard case: 2026-27 -> 2025-26
+    assert _previous_year_url("https://example.com/ae-attendances-2026-27/") == \
+        "https://example.com/ae-attendances-2025-26/"
+    
+    # Edge case: 2025-26 -> 2024-25
+    assert _previous_year_url("https://example.com/ae-attendances-2025-26/") == \
+        "https://example.com/ae-attendances-2024-25/"
+    
+    # URL without year pattern should return unchanged
+    assert _previous_year_url("https://example.com/no-year-here/") == \
+        "https://example.com/no-year-here/"
+
+
+def test_resolve_timeseries_fallback_to_previous_year(monkeypatch):
+    """Test fallback to previous year when category page returns 404."""
+    from ingestion.link_resolver import resolve_timeseries_url
+    import ingestion.link_resolver as lr
+    from ingestion.settings import settings
+    import requests
+    
+    # Mock landing page response
+    landing_html = """
+    <html><body>
+        <a href="/statistics/statistical-work-areas/ae-waiting-times-and-activity/ae-attendances-and-emergency-admissions-2026-27/">
+            Monthly A&E Attendances and Emergency Admissions 2026-27
+        </a>
+    </body></html>
+    """
+    
+    # Mock current year category page (404)
+    current_year_html = "<html><body>Not Found</body></html>"
+    
+    # Mock previous year category page with XLS link
+    prev_year_html = """
+    <html><body>
+        <a href="/statistics/statistical-work-areas/ae-waiting-times-and-activity/monthly-ae-provider-jan-2026.xls">
+            Monthly A&E Provider Data January 2026
+        </a>
+    </body></html>
+    """
+    
+    call_count = [0]
+    
+    def mock_fetch_html(url):
+        call_count[0] += 1
+        if url == settings.landing_page_url:
+            return landing_html
+        elif "2026-27" in url:
+            # First call to current year category page - raise 404
+            resp = requests.Response()
+            resp.status_code = 404
+            raise requests.HTTPError("404 Not Found", response=resp)
+        elif "2025-26" in url:
+            return prev_year_html
+        return "<html></html>"
+    
+    monkeypatch.setattr(lr, "_fetch_html", mock_fetch_html)
+    
+    # Clear robots cache
+    lr._ROBOTS_CACHE.clear()
+    monkeypatch.setattr(lr.RobotFileParser, "read", lambda self: setattr(self, 'allow_all', True) or setattr(self, 'disallow_all', False))
+    monkeypatch.setattr(lr.RobotFileParser, "can_fetch", lambda self, ua, url: True)
+    
+    result = resolve_timeseries_url()
+    
+    # Should have tried current year first, then fallback to previous year
+    assert call_count[0] >= 2
+    assert result.url.endswith(".xls")
+    assert "2025-26" in result.url or "jan-2026" in result.url.lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

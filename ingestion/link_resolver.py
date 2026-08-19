@@ -41,6 +41,15 @@ _YEAR_PAGE_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+
+def _previous_year_url(url: str) -> str:
+    """Decrement the financial year in URL (e.g., 2026-27 -> 2025-26)."""
+    match = re.search(r"(\d{4})-(\d{2})", url)
+    if not match:
+        return url
+    start, end = int(match.group(1)), int(match.group(2))
+    return url.replace(f"{start}-{end:02d}", f"{start-1}-{start-2000:02d}")
+
 @dataclass
 class ResolvedLink:
     url: str
@@ -181,20 +190,31 @@ def resolve_timeseries_url() -> ResolvedLink:
     if not category_url:
         raise RuntimeError(f"Could not find the category page on {settings.landing_page_url}")
 
-    # STEP 2: Fetch the category page and find the latest XLS download
-    log.info("Fetching category page: %s", category_url)
-    cat_html = _fetch_html(category_url)
-    cat_soup = BeautifulSoup(cat_html, "html.parser")
-
-    for anchor in cat_soup.find_all("a", href=True):
-        href = anchor["href"]
-        text = anchor.get_text(separator=" ", strip=True)
-        
-        # Use compiled patterns from settings
-        is_monthly = any(p.search(text) for p in _XLS_LINK_PATTERNS)
-        is_xls = href.endswith(".xls") or href.endswith(".xlsx")
-        if is_monthly and is_xls:
-            log.info("Resolved final XLS link: %s", _abs_url(href))
-            return ResolvedLink(url=_abs_url(href), link_text=text)
-
-    raise RuntimeError(f"Could not find an XLS download link on the category page: {category_url}")
+    # Try current year, then fallback to previous year
+    for attempt_url in [category_url, _previous_year_url(category_url)]:
+        try:
+            log.info("Fetching category page: %s", attempt_url)
+            cat_html = _fetch_html(attempt_url)
+            cat_soup = BeautifulSoup(cat_html, "html.parser")
+            
+            for anchor in cat_soup.find_all("a", href=True):
+                href = anchor["href"]
+                text = anchor.get_text(separator=" ", strip=True)
+                
+                # Use compiled patterns from settings
+                is_monthly = any(p.search(text) for p in _XLS_LINK_PATTERNS)
+                is_xls = href.endswith(".xls") or href.endswith(".xlsx")
+                if is_monthly and is_xls:
+                    log.info("Resolved final XLS link: %s", _abs_url(href))
+                    return ResolvedLink(url=_abs_url(href), link_text=text)
+            
+            # If we got here, page loaded but no XLS found
+            log.warning("No XLS link found on %s", attempt_url)
+            
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                log.info("Category page not found (404): %s, trying fallback", attempt_url)
+                continue
+            raise
+    
+    raise RuntimeError(f"Could not find an XLS download link on category page or fallback: {category_url}")
