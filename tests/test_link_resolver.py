@@ -2,6 +2,7 @@
 
 import pytest
 from ingestion.link_resolver import _abs_url
+from ingestion.settings import settings
 
 
 def test_abs_url_normalization():
@@ -27,6 +28,44 @@ def test_abs_url_with_category_pages():
     
     # Protocol-relative category page
     assert _abs_url("//www.england.nhs.uk/statistics/") == "https://www.england.nhs.uk/statistics/"
+
+
+def test_category_patterns_from_settings():
+    """Test that settings has the new pattern fields."""
+    assert hasattr(settings, 'category_page_patterns')
+    assert hasattr(settings, 'xls_link_patterns')
+    assert hasattr(settings, 'exclude_patterns')
+    assert isinstance(settings.category_page_patterns, list)
+    assert isinstance(settings.xls_link_patterns, list)
+    assert isinstance(settings.exclude_patterns, list)
+    assert len(settings.category_page_patterns) >= 2
+    assert len(settings.xls_link_patterns) >= 2
+    assert len(settings.exclude_patterns) >= 3
+
+
+def test_patterns_match_expected_strings():
+    """Test that compiled patterns match expected strings."""
+    import re
+    
+    # Compile patterns like the module does
+    category_patterns = [re.compile(p, re.IGNORECASE) for p in settings.category_page_patterns]
+    xls_patterns = [re.compile(p, re.IGNORECASE) for p in settings.xls_link_patterns]
+    exclude_patterns = [re.compile(p, re.IGNORECASE) for p in settings.exclude_patterns]
+    
+    # Category page patterns should match
+    category_text = "Monthly A&E Attendances and Emergency Admissions 2026-27"
+    assert any(p.search(category_text) for p in category_patterns)
+    
+    # XLS link patterns should match
+    xls_text = "Monthly A&E Provider Data January 2026"
+    assert any(p.search(xls_text) for p in xls_patterns)
+    
+    # Exclude patterns should match
+    exclude_text = "Time Series Data"
+    assert any(p.search(exclude_text) for p in exclude_patterns)
+    
+    ecds_text = "ECDS Monthly Data"
+    assert any(p.search(ecds_text) for p in exclude_patterns)
 
 
 if __name__ == "__main__":

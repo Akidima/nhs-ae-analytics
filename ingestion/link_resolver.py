@@ -25,6 +25,11 @@ _BACKFILL_YEAR_PAGES = [
     "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/ae-attendances-and-emergency-admissions-2026-27/",
 ]
 
+# Pre-compiled regex patterns from settings (case-insensitive)
+_CATEGORY_PAGE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in settings.category_page_patterns]
+_XLS_LINK_PATTERNS = [re.compile(p, re.IGNORECASE) for p in settings.xls_link_patterns]
+_EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in settings.exclude_patterns]
+
 @dataclass
 class ResolvedLink:
     url: str
@@ -69,13 +74,13 @@ def resolve_backfill_urls(year_pages: list[str] | None = None) -> list[ResolvedL
             text = anchor.get_text(separator=" ", strip=True)
             text = re.sub(r"\s+", " ", text)
 
-            # same filter as STEP 2: monthly provider file, not ECDS/CSV/quarterly
-            is_monthly = "monthly a&e" in text.lower() or "monthly ae" in text.lower()
+            # Use compiled patterns from settings
+            is_monthly = any(p.search(text) for p in _XLS_LINK_PATTERNS)
             is_xls = href.endswith(".xls") or href.endswith(".xlsx")
             if not (is_monthly and is_xls):
                 continue
-            # skip the national time-series aggregates
-            if "time series" in text.lower():
+            # skip the national time-series aggregates and other excluded
+            if any(p.search(text) for p in _EXCLUDE_PATTERNS):
                 continue
 
             url = _abs_url(href)
@@ -94,13 +99,6 @@ def resolve_timeseries_url() -> ResolvedLink:
     log.info("Fetching landing page: %s", settings.landing_page_url)
     html = _fetch_html(settings.landing_page_url)
     soup = BeautifulSoup(html, "html.parser")
-    
-    # HARDCODED SEARCH TEXT to bypass .env prefix issues completely
-    search_text = "Monthly A&E Attendances and Emergency Admissions"
-    pattern = re.compile(
-        search_text.replace(" ", r"\s+"),
-        re.IGNORECASE
-    )
 
     category_url = None
 
@@ -109,11 +107,12 @@ def resolve_timeseries_url() -> ResolvedLink:
         text = anchor.get_text(separator=" ", strip=True)
         text = re.sub(r"\s+", " ", text)
         
-        # Skip the national aggregate "Time Series" files
-        if "time series" in text.lower():
+        # Skip excluded patterns (time series, ECDS, quarterly)
+        if any(p.search(text) for p in _EXCLUDE_PATTERNS):
             continue
             
-        if pattern.search(text):
+        # Match category page patterns
+        if any(p.search(text) for p in _CATEGORY_PAGE_PATTERNS):
             href = anchor["href"]
             
             # If it's already a direct XLS link, just return it (future-proofing)
@@ -121,15 +120,11 @@ def resolve_timeseries_url() -> ResolvedLink:
                 return ResolvedLink(url=_abs_url(href), link_text=text)
             
             # Otherwise, it's a category page. Save it and break.
-            category_url = href
-            if category_url.startswith("/"):
-                category_url = f"https://www.england.nhs.uk{category_url}"
-            elif category_url.startswith("//"):
-                category_url = f"https:{category_url}"
+            category_url = _abs_url(href)
             break # Take the first match (the newest year)
 
     if not category_url:
-        raise RuntimeError(f"Could not find the category page for '{search_text}' on {settings.landing_page_url}")
+        raise RuntimeError(f"Could not find the category page on {settings.landing_page_url}")
 
     # STEP 2: Fetch the category page and find the latest XLS download
     log.info("Fetching category page: %s", category_url)
@@ -140,9 +135,10 @@ def resolve_timeseries_url() -> ResolvedLink:
         href = anchor["href"]
         text = anchor.get_text(separator=" ", strip=True)
         
-        # Look specifically for the "Monthly A&E" XLS file.
-        # This ensures we grab the Sitrep and ignore the "ECDS" XLS files on the same page.
-        if ("monthly a&e" in text.lower() or "monthly ae" in text.lower()) and (href.endswith(".xls") or href.endswith(".xlsx")):
+        # Use compiled patterns from settings
+        is_monthly = any(p.search(text) for p in _XLS_LINK_PATTERNS)
+        is_xls = href.endswith(".xls") or href.endswith(".xlsx")
+        if is_monthly and is_xls:
             log.info("Resolved final XLS link: %s", _abs_url(href))
             return ResolvedLink(url=_abs_url(href), link_text=text)
 
