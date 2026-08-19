@@ -44,7 +44,7 @@ LANDING_TABLE = "ae_activity_landing"
 # GX has no built-in "compare this row" to the previous row expectation.
 # so we hand it a column that already contains the lagged value, and then we can compare the two columns.
 
-MONTHLY_ACTIVITY_QUERY = f"""
+MONTHLY_ACTIVITY_QUERY = """
     with monthly as (
         select
             period,
@@ -107,7 +107,7 @@ def get_landing_batch_definition(context):
         return asset.add_batch_definition_whole_table("landing_whole_table")
 
 
-def get_monthly_totals_batch_defintion(context):
+def get_monthly_totals_batch_definition(context):
     """Query-based batch: one row per period with aggregates + MoM change.
 
     Back-volume-per-month and KPI reconciliation checks, which need 

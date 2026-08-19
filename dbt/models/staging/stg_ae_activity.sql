@@ -1,7 +1,7 @@
 -- stg_ae_activity
 -- The "silver" layer: one clean, typed row per provider per month.
 --
--- Deliberately thin. The Python ingestion pipeline (Phase 5) already:
+-- Deliberately thin. The Python ingestion pipeline already:
 --   * parsed the messy two-row NHS header into canonical columns,
 --   * dropped the England aggregate row,
 --   * corrected breach semantics (>4hr, not <4hr),

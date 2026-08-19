@@ -17,7 +17,7 @@ from datetime import date, timedelta
 import great_expectations as gx
 from .logging_setup import get_logger
 
-log = get_logger(__name__)
+logger = get_logger(__name__)
 
 LANDING_SUITE_NAME = "ae_activity_landing_suite"
 MONTHLY_TOTALS_SUITE_NAME = "monthly_totals_suite"
@@ -44,72 +44,103 @@ NATIONAL_MONTHLY_ATTENDANCE_CEILING = 3_500_000
 def build_landing_suite(context):
     """Row-level suite validated against staging.ae_activity_landing."""
     suite = gx.ExpectationSuite(name=LANDING_SUITE_NAME)
-    suite = context.suites.add(suite)
+    suite = context.suites.add_or_update(suite)
 
-# --------- 1. NULL CHECKS ------------------------------------
-# These are the exact columns whose silent nulling caused the
-# anonymous-hospital-codes bug during Phase 5 ingestion. Now Permanant.
-for column in ("org_code", "org_name", "period", "attendances_total"):
+    # --------- 1. NULL CHECKS ------------------------------------
+    # These are the exact columns whose silent nulling caused the
+    # anonymous-hospital-codes bug during Phase 5 ingestion. Now Permanant.
+    for column in ("org_code", "org_name", "period", "attendances_total"):
+        suite.add_expectation(
+            gx.expectations.ExpectColumnValuesToNotBeNull(column=column)
+        )
+
+    # ---- 2. VOLUME CHECKS ----------------------------------------
+    # A very low total row count means a load silently dropped most data.
+    # The tight, per-month version of this check lives in the monthly
+    # totals suite below, where "per month" actually means something.
     suite.add_expectation(
-        gx.expectations.ExpectColumnValuesToNotBeNull(column=column)
+        gx.expectations.ExpectTableRowCountToBeBetween(min_value=1, max_value=None)
     )
 
-# ---- 2. VOLUME CHECKS ----------------------------------------
-# A very low total row count means a load silently dropped most data.
-# The tight, per-month version of this check lives in the monthly
-# totals suite below, where "per month" actually means something.
-suite.add_expectation(
-    gx.expectations.ExpectTableRowCountToBeBetween(min_value=1, max_value=None)
-)
-
-# ---- 3. FRESHNESS CHECKS --------------------------------------
-# The most recent loaded period should be recent relative to today.
-# Computed at RUN TIME -- a moving target, not a fixed date. 
-earliest_acceptable = date.today() - timedelta(days=FRESHNESS_MAX_AGE_DAYS)
-suite.add_expectation(
-    gx.expectation.ExpectColumnMaxToBeBetween(
-        column="period",
-        min_value=earliest_acceptable,
-        max_value=date.today(),
+    # ---- 3. FRESHNESS CHECKS --------------------------------------
+    # The most recent loaded period should be recent relative to today.
+    # Computed at RUN TIME -- a moving target, not a fixed date.
+    earliest_acceptable = date.today() - timedelta(days=FRESHNESS_MAX_AGE_DAYS)
+    suite.add_expectation(
+        gx.expectations.ExpectColumnMaxToBeBetween(
+            column="period",
+            min_value=earliest_acceptable,
+            max_value=date.today(),
+        )
     )
-)
 
-# ----- 4. RANGE CHECKS ----------------------------------------
-suite.add_expectation(
-    gx.expectation.ExpectColumnsValuesToBeBetween(
-        column="performance_all_pct", min_value=0, max_value=1
+    # ----- 4. RANGE CHECKS ----------------------------------------
+    suite.add_expectation(
+        gx.expectations.ExpectColumnsValuesToBeBetween(
+            column="performance_all_pct", min_value=0, max_value=1
+        )
     )
-)
 
-suite.add_expectation(
-    gx.expectation.ExpectColumnsValuesToBeBetween(
-        column="attendances_total", min_value=0, max_value=None
+    suite.add_expectation(
+        gx.expectations.ExpectColumnsValuesToBeBetween(
+            column="attendances_total", min_value=0, max_value=None
+        )
     )
-)
-# The exact check you ran by hand, now permanent
-# and automatic: breaches can never exceed total attendances.
-suite.add_expectation(
-    gx.expectation.ExpectColumnPairValuesToBeGreaterThanOrEqualToB(
-        column_A="attendances_total", column_B="breaches_total"
+    # The exact check you ran by hand, now permanent
+    # and automatic: breaches can never exceed total attendances.
+    suite.add_expectation(
+        gx.expectations.ExpectColumnPairValuesAToBeGreaterThanOrEqualToB(
+            column_A="attendances_total", column_B="breaches_total"
+        )
     )
-)
 
-#------ 5. DUPLICATE DETECTION ---------------------------------
-# One row per (period, org_code) -- the same grain guarantee the dbt
-# marts layer enforces, checked here one step eariler, at ingestion.\s
-suite.add_expectation(
-    gx.expectations.ExpectCompoundColumnsToBeUnique(
-        column="provider_count",
-        min_value=EXPECTED_MIN_PROVIDERS_PER_MONTH,
-        max_value=EXPECTED_MAX_PROVIDERS_PER_MONTH
+    #------ 5. DUPLICATE DETECTION ---------------------------------
+    # One row per (period, org_code) -- the same grain guarantee the dbt
+    # marts layer enforces, checked here one step eariler, at ingestion.
+    suite.add_expectation(
+        gx.expectations.ExpectCompoundColumnsToBeUnique(
+            column="provider_count",
+            min_value=EXPECTED_MIN_PROVIDERS_PER_MONTH,
+            max_value=EXPECTED_MAX_PROVIDERS_PER_MONTH
+        )
     )
-)
 
-# ----- 6. KPI RECONCILIATION ----------------------------------
-# HONEST LIMITATION: Ingestion delibrately drops the NHS "England"
-# control-total row to avoid double-counting in the fact tables, so
-# there's no live external ground stored to reconcile against 
-# automatically. As a working proxy I  check TWO things instead:
-# 
-# a.) absolute sanity bounds (is this a plausible national total at all, order-of-magnitude), and 
-#  b.) month-over-month (a SQL-computed % change vs the prior period -- see MONTHLY_TOTALS_QUERY in context.py)
+    return suite
+
+def build_monthly_totals_suite(context):
+    """Monthly totals suite for KPI reconciliation checks."""
+    suite = gx.ExpectationSuite(name=MONTHLY_TOTALS_SUITE_NAME)
+    suite = context.suites.add_or_update(suite)
+
+    # ----- 6. KPI RECONCILIATION ----------------------------------
+    # HONEST LIMITATION: Ingestion delibrately drops the NHS "England"
+    # control-total row to avoid double-counting in the fact tables, so
+    # there's no live external ground stored to reconcile against
+    # automatically. As a working proxy I  check TWO things instead:
+    #
+    # a.) absolute sanity bounds (is this a plausible national total at all, order-of-magnitude), and
+    #  b.) month-over-month (a SQL-computed % change vs the prior period -- see MONTHLY_TOTALS_QUERY in context.py)
+    #
+    #
+    # This catches gross corruption (a botched parse, a halved or doubled value)
+    # even without an external ground truth. For true reconciliation to NHS's own published national total
+    # ingestion would need to persist the England row to a small control-totals table before dropping it
+    # from the main load. Flagging it rather than quietly pretending this is
+    # equilavent to reconciling against NHS's own number.
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToBeBetween(
+            column="total_attendances",
+            min_value=NATIONAL_MONTHLY_ATTENDANCE_FLOOR,
+            max_value=NATIONAL_MONTHLY_ATTENDANCE_CEILING,
+        )
+    )
+    suite.add_expectation(
+        gx.expectations.ExpectColumnValuesToBeBetween(
+            column="momth_over_month_pct_change",
+            min_value=-MOM_MAX_SWING_FCT,
+            max_value=MOM_MAX_SWING_FCT,
+        )
+    )
+
+    return suite
+
