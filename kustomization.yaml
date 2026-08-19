@@ -1,0 +1,53 @@
+---
+# Kustomization for NHS A&E Analytics
+# Use this for environment-specific overlays
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nhs-ae-analytics
+
+resources:
+  - k8s-namespace.yaml
+  - k8s-config-secrets.yaml
+  - k8s-pvcs.yaml
+  - k8s-services.yaml
+  - k8s-postgres.yaml
+  - k8s-minio.yaml
+  - k8s-localstack.yaml
+  - k8s-airflow.yaml
+  - k8s-jobs.yaml
+
+# Do NOT set commonLabels.app — it overwrites per-service selectors
+# (postgres/minio/airflow) and breaks Service→Pod matching.
+labels:
+  - pairs:
+      project: nhs-ae-analytics
+      version: "1.0"
+    includeSelectors: false
+
+# Common annotations
+commonAnnotations:
+  managed-by: "kustomize"
+
+# Replicas for Deployments (adjust for production)
+replicas:
+  - name: airflow-webserver
+    count: 1
+  - name: airflow-scheduler
+    count: 1
+  - name: postgres
+    count: 1
+  - name: minio
+    count: 1
+  - name: localstack
+    count: 1
+
+# Resource limits (adjust for your cluster)
+# Uncomment to apply:
+# commonResources:
+#   limits:
+#     cpu: 2000m
+#     memory: 2Gi
+#   requests:
+#     cpu: 100m
+#     memory: 128Mi

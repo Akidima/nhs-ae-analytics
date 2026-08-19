@@ -54,7 +54,11 @@ def load_registry(path: str | None = None) -> Registry:
         schema_version=str(raw.get("schema_version","unknown")),
         anchor_column=str(raw.get("sheet_anchor_column","Code")),
         preferred_sheet_contains=[
-            s.lower() for s in raw.get("preferred_sheet_contains", [])
+            s.lower() for s in (
+                raw.get("preferred_sheet_contains")
+                or raw.get("preferred_sheet_name_contains")
+                or []
+            )
         ],
         drift_policy=raw.get("drift_policy",{}),
         columns=cols

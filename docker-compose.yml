@@ -25,7 +25,7 @@ x-airflow-common: &airflow-common
       requests==2.32.3 beautifulsoup4==4.12.3 lxml==5.3.0
       pandas==2.2.3 xlrd==2.0.1 openpyxl==3.1.5
       SQLAlchemy==2.0.36 psycopg2-binary==2.9.10 boto3==1.35.76
-      pandera==0.21.0 python-dotenv==1.0.1
+      pandera==0.21.0 python-dotenv==1.0.1 PyYAML==6.0.2
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs

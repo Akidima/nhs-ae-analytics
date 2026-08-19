@@ -1,0 +1,6 @@
+---
+# Kubernetes namespace for NHS A&E Analytics
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nhs-ae-analytics

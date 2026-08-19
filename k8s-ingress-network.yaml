@@ -1,0 +1,66 @@
+---
+# Ingress for external access to Airflow and MinIO (optional, production-recommended)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nhs-ae-ingress
+  namespace: nhs-ae-analytics
+spec:
+  rules:
+  - host: airflow.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: airflow-webserver
+            port:
+              number: 8080
+  - host: minio.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio-console
+            port:
+              number: 9001
+
+---
+# NetworkPolicy: Restrict traffic between pods (optional, recommended for security)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nhs-ae-network-policy
+  namespace: nhs-ae-analytics
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nhs-ae-analytics
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: nhs-ae-analytics
+  # DNS inside the cluster
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # NHS England downloads + package indexes (HTTPS)
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80

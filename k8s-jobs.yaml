@@ -1,0 +1,200 @@
+---
+# Job for Ingestion pipeline (run once or on schedule via CronJob)
+# Image must bake in the ingestion package + config (emptyDir mounts were wiping code).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingestion-job
+  namespace: nhs-ae-analytics
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: ingestion
+        image: nhs-ae-analytics:ingestion
+        command: ["python", "-m", "ingestion.run"]
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONPATH
+          value: "/app"
+        - name: NHS_AE_DB_URL
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: NHS_AE_DB_URL
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        - name: RAW_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: RAW_BUCKET
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# CronJob for scheduled ingestion (runs daily at 2 AM UTC)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingestion-cronjob
+  namespace: nhs-ae-analytics
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: ingestion
+            image: nhs-ae-analytics:ingestion
+            command: ["python", "-m", "ingestion.run"]
+            env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: PYTHONPATH
+              value: "/app"
+            - name: NHS_AE_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: NHS_AE_DB_URL
+            - name: MINIO_ENDPOINT
+              value: "http://minio:9000"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: RAW_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: RAW_BUCKET
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+
+---
+# Job for dbt build — image must contain the dbt project (do not mount emptyDir over /dbt)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dbt-build-job
+  namespace: nhs-ae-analytics
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: dbt
+        image: nhs-ae-analytics:dbt
+        command: ["dbt", "build"]
+        env:
+        - name: DBT_PROFILES_DIR
+          value: "/dbt"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: airflow-secrets
+              key: POSTGRES_DB
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# CronJob for scheduled dbt runs (daily at 3 AM UTC, after ingestion)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dbt-cronjob
+  namespace: nhs-ae-analytics
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: dbt
+            image: nhs-ae-analytics:dbt
+            command: ["dbt", "build"]
+            env:
+            - name: DBT_PROFILES_DIR
+              value: "/dbt"
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-secrets
+                  key: POSTGRES_DB
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"

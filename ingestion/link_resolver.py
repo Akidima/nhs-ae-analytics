@@ -20,6 +20,10 @@ from .settings import settings
 log = get_logger(__name__)
 
 _USER_AGENT = "nhs-ae-analytics-ingestion/1.0 (+portfolio-project)"
+_BACKFILL_YEAR_PAGES = [
+    "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/ae-attendances-and-emergency-admissions-2025-26/",
+    "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/ae-attendances-and-emergency-admissions-2026-27/",
+]
 
 @dataclass
 class ResolvedLink:
@@ -31,6 +35,59 @@ def _fetch_html(url: str) -> str:
     resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=30)
     resp.raise_for_status()
     return resp.text
+
+def _abs_url(href: str) -> str:
+    """Normalise a possibly-relative href to an absolute england.nhs.uk URL."""
+    if href.startswith("//"):
+        return f"https:{href}"
+    if href.startswith("/"):
+        return f"https://www.england.nhs.uk{href}"
+    return href
+
+def resolve_backfill_urls(year_pages: list[str] | None = None) -> list[ResolvedLink]:
+    """Find every Monthly A&E provider XLS across the given year-pages.
+
+    Reuses the same 'monthly a&e' + .xls matching as resolve_timeseries_url's
+    STEP 2, but collects ALL matches instead of returning the first. Used by
+    the backfill runner to ingest a full year of history in one command.
+    """
+    pages = year_pages or _BACKFILL_YEAR_PAGES
+    found: list[ResolvedLink] = []
+    seen: set[str] = set()
+
+    for page in pages:
+        log.info("Backfill: scanning year-page %s", page)
+        try:
+            html = _fetch_html(page)
+        except Exception as err:  # noqa: BLE001
+            log.error("Could not fetch year-page %s: %s", page, err)
+            continue
+
+        soup = BeautifulSoup(html, "html.parser")
+        for anchor in soup.find_all("a", href=True):
+            href = anchor["href"]
+            text = anchor.get_text(separator=" ", strip=True)
+            text = re.sub(r"\s+", " ", text)
+
+            # same filter as STEP 2: monthly provider file, not ECDS/CSV/quarterly
+            is_monthly = "monthly a&e" in text.lower() or "monthly ae" in text.lower()
+            is_xls = href.endswith(".xls") or href.endswith(".xlsx")
+            if not (is_monthly and is_xls):
+                continue
+            # skip the national time-series aggregates
+            if "time series" in text.lower():
+                continue
+
+            url = _abs_url(href)
+            if url in seen:
+                continue
+            seen.add(url)
+            found.append(ResolvedLink(url=url, link_text=text))
+            log.info("  found: %s (%s)", text, url.rsplit("/", 1)[-1])
+
+    log.info("Backfill: %d monthly files found across %d page(s)",
+             len(found), len(pages))
+    return found
 
 def resolve_timeseries_url() -> ResolvedLink:
     """Find the latest Monthly A&E Sitrep XLS link using a two-step process."""

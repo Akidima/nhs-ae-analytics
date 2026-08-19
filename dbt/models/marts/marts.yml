@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "One row per month, with NHS financial-year and winter flags."
+    columns:
+      - name: date_key
+        description: "Surrogate key, YYYYMM integer."
+        tests:
+          - unique
+          - not_null
+      - name: period
+        tests:
+          - unique
+          - not_null
+      - name: financial_year
+        tests:
+          - not_null
+
+  - name: dim_provider
+    description: "SCD2 provider dimension. One row per provider version."
+    columns:
+      - name: provider_key
+        description: "Surrogate key, unique per provider version."
+        tests:
+          - unique
+          - not_null
+      - name: org_code
+        description: "Business key. Not unique (a provider can have many versions)."
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - org_code
+            - is_current
+          config:
+            where: "is_current = true"
+
+  - name: fct_ae_activity
+    description: "Fact table at period x provider grain."
+    columns:
+      - name: date_key
+        description: "FK to dim_date"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: provider_key
+        description: "FK to dim_provider"
+        tests:
+          - relationships:
+              to: ref('dim_provider')
+              field: provider_key
+      - name: within_4hr_total
+        description: "Derived: attendances seen within 4 hours. Must be >= 0."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - period
+            - org_code
+      - dbt_utils.expression_is_true:
+          expression: "breaches_total <= attendances_total"

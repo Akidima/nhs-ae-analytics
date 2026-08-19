@@ -95,15 +95,24 @@ def load(df: pd.DataFrame, *, source_file_name: str, source_file_hash: str, sour
     if dupes:
         raise ValueError(f"Duplicate columns in staging frame: {dupes}")
 
-    period_value = out["period"].iloc[0]
+    if out.empty:
+        raise ValueError("Cannot load an empty DataFrame into staging")
+    if out["period"].isna().any():
+        raise ValueError(
+            "period is required on every row — inject it before staging_loader.load"
+        )
+
+    # Replace every month present in this batch (Sitrep = one month; safe if more)
+    periods = [p for p in out["period"].dropna().unique().tolist()]
     with engine.begin() as conn:
         for stmt in _DDL.strip().split(";"):
             if stmt.strip():
                 conn.execute(text(stmt))
-        conn.execute(
-            text(f"DELETE FROM {LANDING_TABLE} WHERE period = :p"),
-            {"p": period_value},
-        )
+        for period_value in periods:
+            conn.execute(
+                text(f"DELETE FROM {LANDING_TABLE} WHERE period = :p"),
+                {"p": period_value},
+            )
         out.to_sql(
             "ae_activity_landing",
             conn,

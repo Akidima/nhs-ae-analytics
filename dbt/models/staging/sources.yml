@@ -1,0 +1,35 @@
+version: 2
+
+sources:
+  - name: landing
+    description: >
+      Raw landing zone populated by the Python ingestion pipeline.
+      One row per provider per reporting month. The ingestion layer already
+      validates and reconciles this data to the NHS England published totals.
+    schema: staging
+    tables:
+      - name: ae_activity_landing
+        description: "Monthly A&E provider activity, loaded by ingestion.run pipeline."
+        columns:
+          - name: period
+            description: "First-of-month reporting period (YYYY-MM-DD)"
+            tests:
+              - not_null
+
+          - name: org_code
+            description: "NHS provider organisation code (e.g. RC9). Business key."
+            tests:
+              - not_null
+
+          - name: org_name
+            description: "NHS provider organisation name as published that month."
+            tests:
+              - not_null
+
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - period
+                - org_code
+          - dbt_utils.expression_is_true:
+              expression: "org_code ~ '^[A-Z0-9]{3,6}$'"

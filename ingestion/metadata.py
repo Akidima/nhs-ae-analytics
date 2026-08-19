@@ -29,9 +29,21 @@ def record_source_file(engine: Engine, *, source_name: str, filename: str,
                         url: str, sha256: str, size_bytes: int,
                         schema_version: str, raw_key: str, row_count: int,
                         data_month, status: str) -> int:
+    params = {
+        "source_name": source_name,
+        "filename": filename,
+        "url": url,
+        "data_month": data_month,
+        "size": size_bytes,
+        "sha256": sha256,
+        "schema_version": schema_version,
+        "raw_key": raw_key,
+        "row_count": row_count,
+        "status": status,
+    }
     with engine.begin() as conn:
         sid = conn.execute(
-            text(""" 
+            text("""
                 INSERT INTO meta.source_file
                 (source_name, original_filename, resolved_url, data_month,
                 file_size_bytes, sha256, schema_version, raw_storage_path,
@@ -42,20 +54,22 @@ def record_source_file(engine: Engine, *, source_name: str, filename: str,
                 ON CONFLICT (source_name, sha256) DO NOTHING
                 RETURNING source_file_id
             """),
-            {
-                "source_name": source_name,
-                "filename": filename,
-                "url": url,
-                "data_month": data_month,
-                "size": size_bytes,
-                "sha256": sha256,
-                "schema_version": schema_version,
-                "raw_key": raw_key,
-                "row_count": row_count,
-                "status": status
-            },
+            params,
         ).first()
-    return int(sid[0]) if sid else -1
+        if sid is None:
+            # Already catalogued — look up the existing id (never invent -1).
+            sid = conn.execute(
+                text("""
+                    SELECT source_file_id FROM meta.source_file
+                    WHERE source_name = :source_name AND sha256 = :sha256
+                """),
+                {"source_name": source_name, "sha256": sha256},
+            ).first()
+        if sid is None:
+            raise RuntimeError(
+                f"Could not resolve source_file_id for {source_name}/{sha256}"
+            )
+    return int(sid[0])
 
 def upsert_period_versions(engine: Engine, df: pd.DataFrame,
                             source_file_id: int) -> int:

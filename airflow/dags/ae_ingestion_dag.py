@@ -65,6 +65,15 @@ def ae_ingestion():
         if missing:
             raise RuntimeError(f"Missing required columns: {missing}")
 
+        # Sitrep grids have no period column — stamp it from the metadata block
+        # (same path as ingestion.run) so staging deletes/reloads one month cleanly.
+        period = parser.extract_period(content, registry)
+        if period is None:
+            raise RuntimeError(
+                "Could not extract period from metadata block — check 'Period:' label"
+            )
+        df["period"] = period
+
         rows = staging_loader.load(
             df, source_file_name=meta["filename"],
             source_file_hash=meta["sha256"], source_url=meta["url"],

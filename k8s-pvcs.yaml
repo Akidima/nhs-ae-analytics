@@ -1,0 +1,59 @@
+---
+# PersistentVolumeClaim for PostgreSQL data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: nhs-ae-analytics
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # Adjust based on your data size
+  storageClassName: standard  # Use your cluster's storage class
+
+---
+# PersistentVolumeClaim for MinIO data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: nhs-ae-analytics
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi  # Adjust based on your raw zone size
+  storageClassName: standard
+
+---
+# PersistentVolumeClaim for LocalStack data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: localstack-pvc
+  namespace: nhs-ae-analytics
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+# PersistentVolumeClaim for Airflow logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-logs-pvc
+  namespace: nhs-ae-analytics
+spec:
+  accessModes:
+    - ReadWriteMany  # Must support concurrent reads from multiple pods
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
