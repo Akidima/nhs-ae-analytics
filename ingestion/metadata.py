@@ -9,9 +9,9 @@ import re
 from datetime import date, datetime, timezone
 from enum import Enum
 
-import pandas as pd 
+import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.engine import Engine 
+from sqlalchemy.engine import Engine
 
 from .hashing import row_hash
 from .logging_setup import get_logger
@@ -112,7 +112,7 @@ def record_source_file(engine: Engine, *, source_name: str, filename: str,
             extra={
                 "source_file_id": int(sid[0]),
                 "source_name": source_name,
-                "filename": filename,
+                "original_filename": filename,
                 "status": status,
             }
         )

@@ -16,7 +16,6 @@ import sys
 from . import downloader, link_resolver, metadata, parser, staging_loader, storage
 from .logging_setup import get_logger
 from .schema import load_registry
-from .settings import settings
 
 log = get_logger("ingestion.run")
 
@@ -104,7 +103,7 @@ def run_ingestion(dag_run_id: str | None = None, dry_run: bool = False,
         return {"status": "success", "rows": rows, "changed": changed,
                 "data_month": data_month}
 
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         log.exception("Ingestion failed: %s", err)
         if not dry_run and run_id != -1:
             metadata.finish_run(engine, run_id, status="failed", notes=str(err))
@@ -147,7 +146,7 @@ def run_backfill_web() -> dict:
             dl = downloader.download(link.url)
             res = run_ingestion(downloaded=dl)
             results.append({"file": dl.filename, **res})
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             log.exception("Backfill failed for %s: %s", link.link_text, err)
             results.append({"file": link.link_text, "status": "failed",
                             "error": str(err)})

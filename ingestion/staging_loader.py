@@ -10,12 +10,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from pathlib import Path
-from .settings import settings
 import pandas as pd
 from sqlalchemy import create_engine, text
 
 from .logging_setup import get_logger
+from .settings import settings
 
 log = get_logger(__name__)
 

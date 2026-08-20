@@ -78,7 +78,7 @@ def _can_fetch(url: str) -> bool:
         try:
             rp.set_url(f"{base}/robots.txt")
             rp.read()
-        except Exception:
+        except (OSError, ValueError):
             rp = None
         _ROBOTS_CACHE[base] = rp
     
@@ -140,7 +140,7 @@ def resolve_backfill_urls(year_pages: list[str] | None = None) -> list[ResolvedL
 
             # Use compiled patterns from settings
             is_monthly = any(p.search(text) for p in _XLS_LINK_PATTERNS)
-            is_xls = href.endswith(".xls") or href.endswith(".xlsx")
+            is_xls = href.endswith((".xls", ".xlsx"))
             if not (is_monthly and is_xls):
                 continue
             # skip the national time-series aggregates and other excluded
@@ -180,7 +180,7 @@ def resolve_timeseries_url() -> ResolvedLink:
             href = anchor["href"]
             
             # If it's already a direct XLS link, just return it (future-proofing)
-            if href.endswith(".xls") or href.endswith(".xlsx"):
+            if href.endswith((".xls", ".xlsx")):
                 return ResolvedLink(url=_abs_url(href), link_text=text)
             
             # Otherwise, it's a category page. Save it and break.
@@ -203,7 +203,7 @@ def resolve_timeseries_url() -> ResolvedLink:
                 
                 # Use compiled patterns from settings
                 is_monthly = any(p.search(text) for p in _XLS_LINK_PATTERNS)
-                is_xls = href.endswith(".xls") or href.endswith(".xlsx")
+                is_xls = href.endswith((".xls", ".xlsx"))
                 if is_monthly and is_xls:
                     log.info("Resolved final XLS link: %s", _abs_url(href))
                     return ResolvedLink(url=_abs_url(href), link_text=text)
