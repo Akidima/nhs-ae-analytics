@@ -58,7 +58,7 @@ def run_ingestion(dag_run_id: str | None = None, dry_run: bool = False,
         df["period"] = period
         log.info("Injected period=%s onto %d rows", period.date().isoformat(), len(df))
 
-        data_month = (df["period"].max().date().isoformat()
+        data_month = (df["period"].max().strftime("%Y-%m")
                       if "period" in df.columns and df["period"].notna().any()
                       else None)
 

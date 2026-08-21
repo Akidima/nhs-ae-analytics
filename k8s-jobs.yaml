@@ -13,8 +13,8 @@ spec:
       restartPolicy: Never
       containers:
       - name: ingestion
-        image: nhs-ae-analytics:ingestion
-        command: ["python", "-m", "ingestion.run"]
+        image: docker.io/akidima/nhs-ae-analytics:ingestion
+        # ENTRYPOINT is set in Dockerfile; no command needed
         env:
         - name: PYTHONUNBUFFERED
           value: "1"
@@ -67,8 +67,8 @@ spec:
           restartPolicy: Never
           containers:
           - name: ingestion
-            image: nhs-ae-analytics:ingestion
-            command: ["python", "-m", "ingestion.run"]
+            image: docker.io/akidima/nhs-ae-analytics:ingestion
+            # ENTRYPOINT is set in Dockerfile; no command needed
             env:
             - name: PYTHONUNBUFFERED
               value: "1"
@@ -118,7 +118,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: dbt
-        image: nhs-ae-analytics:dbt
+        image: docker.io/akidima/nhs-ae-analytics:dbt
         command: ["dbt", "build"]
         env:
         - name: DBT_PROFILES_DIR
@@ -167,7 +167,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: dbt
-            image: nhs-ae-analytics:dbt
+            image: docker.io/akidima/nhs-ae-analytics:dbt
             command: ["dbt", "build"]
             env:
             - name: DBT_PROFILES_DIR

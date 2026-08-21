@@ -1,5 +1,6 @@
 # =====================================================================
 # Ingestion app image — Python 3.12, all pipeline dependencies
+# Build:  docker build -f docker/ingestion.Dockerfile -t nhs-ae-analytics:ingestion .
 # =====================================================================
 FROM python:3.12-slim
 
@@ -10,14 +11,15 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# Install Python deps first (better layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Code is mounted as a volume in dev (docker-compose); copy for prod builds.
+# Copy application code
 COPY ingestion/ ./ingestion/
 COPY config/ ./config/
 
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app
 
-# Default: show help. Real invocation: `python -m ingestion.run`
-CMD ["python", "-c", "print('NHS A&E ingestion image. Run: python -m ingestion.run')"]
+# Default entrypoint for K8s Jobs
+ENTRYPOINT ["python", "-m", "ingestion.run"]

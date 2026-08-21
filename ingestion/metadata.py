@@ -135,9 +135,12 @@ def upsert_period_versions(engine: Engine, df: pd.DataFrame,
         if pd.isna(r.get("org_code")) or pd.isna(r.get("period")):
             continue
         rh = row_hash(r[c] for c in value_cols)
+        period_val = r["period"]
+        if isinstance(period_val, datetime):  # covers pd.Timestamp too
+            period_val = period_val.date()
         records.append({
             "source_file_id": source_file_id,
-            "period": r["period"],
+            "period": period_val,
             "org_code": str(r["org_code"]),
             "row_hash": rh,
         })
@@ -151,7 +154,7 @@ def upsert_period_versions(engine: Engine, df: pd.DataFrame,
         conn.execute(text("""
             CREATE TEMP TABLE tmp_new_versions (
                 source_file_id INTEGER,
-                period TEXT,
+                period DATE,
                 org_code TEXT,
                 row_hash TEXT
             ) ON COMMIT DROP
