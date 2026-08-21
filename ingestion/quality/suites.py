@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import great_expectations as gx
+
 from .logging_setup import get_logger
 
 logger = get_logger(__name__)

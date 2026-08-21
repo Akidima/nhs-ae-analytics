@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass
 from urllib.parse import quote
 
+
 @dataclass(frozen=True)
 class Settings:
     db_url: str

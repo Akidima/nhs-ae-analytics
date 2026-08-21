@@ -52,7 +52,7 @@ metadata:
   namespace: nhs-ae-analytics
 spec:
   accessModes:
-    - ReadWriteMany  # Must support concurrent reads from multiple pods
+    - ReadWriteOnce  # local-path (kind) is node-local: RWO suffices when pods share a node
   resources:
     requests:
       storage: 5Gi

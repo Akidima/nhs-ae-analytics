@@ -112,7 +112,7 @@ def _coerce(series, dtype):
     # ... (leave the rest of your existing code exactly as is) ...
 
 
-_MONTH_RX = re.compile(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+'?(\d{2,4})", re.I)
+_MONTH_RX = re.compile(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+'?(\d{2,4})", re.IGNORECASE)
 
 def extract_period(content: bytes, registry: Registry) -> pd.Timestamp | None:
     """Read the 'Period:' value (e.g. 'May 26') from the metadata block."""

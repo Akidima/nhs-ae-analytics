@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -47,5 +48,20 @@ class Settings:
 #Behaviour
     download_retries: int = int(os.environ.get("DOWNLOAD_RETRIES", "4"))
     log_level: str = os.environ.get("LOG_LEVEL", "INFO")
+
+    # Scraper patterns (case-insensitive regex)
+    category_page_patterns: list[str] = field(default_factory=lambda: [
+        r"Monthly\s+A[&]?E\s+Attendances\s+and\s+Emergency\s+Admissions",
+        r"Monthly\s+AE\s+Attendances\s+and\s+Emergency\s+Admissions",
+    ])
+    xls_link_patterns: list[str] = field(default_factory=lambda: [
+        r"monthly\s+a[&]?e",
+        r"monthly\s+ae",
+    ])
+    exclude_patterns: list[str] = field(default_factory=lambda: [
+        r"time\s+series",
+        r"ecds",
+        r"quarterly",
+    ])
 
 settings = Settings()

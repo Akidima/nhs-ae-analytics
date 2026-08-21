@@ -19,7 +19,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: airflow-webserver
-        image: apache/airflow:2.9.3-python3.12
+        image: docker.io/akidima/nhs-ae-analytics:airflow
         command: ["airflow", "webserver"]
         ports:
         - containerPort: 8080
@@ -85,8 +85,8 @@ spec:
               key: RAW_BUCKET
         - name: PYTHONUNBUFFERED
           value: "1"
-        - name: PIP_ADDITIONAL_REQUIREMENTS
-          value: "requests==2.32.3 beautifulsoup4==4.12.3 lxml==5.3.0 pandas==2.2.3 xlrd==2.0.1 openpyxl==3.1.5 SQLAlchemy==2.0.36 psycopg2-binary==2.9.10 boto3==1.35.76 pandera==0.21.0 python-dotenv==1.0.1 PyYAML==6.0.2"
+        # Deps are baked into the custom image (SQLAlchemy pinned <2.0 for
+        # Airflow 2.9.x) — do NOT set PIP_ADDITIONAL_REQUIREMENTS here.
         volumeMounts:
         - name: airflow-dags
           mountPath: /opt/airflow/dags
@@ -117,7 +117,7 @@ spec:
             cpu: "500m"
       initContainers:
       - name: airflow-db-migrate
-        image: apache/airflow:2.9.3-python3.12
+        image: docker.io/akidima/nhs-ae-analytics:airflow
         command:
         - bash
         - -c
@@ -190,7 +190,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: airflow-scheduler
-        image: apache/airflow:2.9.3-python3.12
+        image: docker.io/akidima/nhs-ae-analytics:airflow
         command: ["airflow", "scheduler"]
         env:
         - name: AIRFLOW_HOME
@@ -239,8 +239,8 @@ spec:
               key: RAW_BUCKET
         - name: PYTHONUNBUFFERED
           value: "1"
-        - name: PIP_ADDITIONAL_REQUIREMENTS
-          value: "requests==2.32.3 beautifulsoup4==4.12.3 lxml==5.3.0 pandas==2.2.3 xlrd==2.0.1 openpyxl==3.1.5 SQLAlchemy==2.0.36 psycopg2-binary==2.9.10 boto3==1.35.76 pandera==0.21.0 python-dotenv==1.0.1 PyYAML==6.0.2"
+        # Deps are baked into the custom image (SQLAlchemy pinned <2.0 for
+        # Airflow 2.9.x) — do NOT set PIP_ADDITIONAL_REQUIREMENTS here.
         volumeMounts:
         - name: airflow-dags
           mountPath: /opt/airflow/dags

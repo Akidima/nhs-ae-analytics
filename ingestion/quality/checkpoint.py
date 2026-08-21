@@ -10,13 +10,11 @@ to the get-or-add try/except pattern used in context.py
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import great_expectations as gx
-from great_expectations.checkpoint import UpdateDataDocsAction
 from great_expectations.core.expectation_suite import ExpectationSuite
 from great_expectations.core.validation_definition import ValidationDefinition
-from great_expectations.checkpoint.checkpoint import CheckpointConfig
 
 from .context import (
     get_landing_batch_definition,
@@ -131,4 +129,3 @@ def build_checkpoint(context: gx.DataContext) -> gx.Checkpoint:
         raise RuntimeError(
             f"Checkpoint '{CHECKPOINT_NAME}' failed to build."
         ) from exc
-  

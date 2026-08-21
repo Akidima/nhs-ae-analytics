@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-import requests 
-import hashlib
+import requests
 
-from pathlib import Path
 from .hashing import sha256_bytes, with_retries
 from .logging_setup import get_logger
-from .settings import settings
 
 log = get_logger(__name__)
 

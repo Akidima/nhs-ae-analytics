@@ -25,7 +25,9 @@ definition) will still apply even if a method got renamed.
 from __future__ import annotations
 
 from pathlib import Path
+
 import great_expectations as gx
+
 from .logging_setup import get_logger
 from .settings import settings
 
