@@ -6,6 +6,8 @@ import time
 from collections.abc import Callable, Iterable
 from typing import Any
 
+import pandas as pd
+
 from .logging_setup import get_logger
 
 log = get_logger(__name__)
@@ -22,14 +24,8 @@ def row_hash(values: Iterable[Any]) -> str:
     """
     def _norm(v: Any) -> str:
         # Treat None / NaN / pandas NA as the same empty token so hashes stay stable
-        if v is None:
+        if v is None or pd.isna(v):
             return ""
-        try:
-            import pandas as pd
-            if pd.isna(v):
-                return ""
-        except (TypeError, ValueError):
-            pass
         return str(v)
 
     joined = "\x1f".join(_norm(v) for v in values)

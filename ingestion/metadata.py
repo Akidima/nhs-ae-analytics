@@ -36,8 +36,13 @@ class IngestStatus(str, Enum):
     SKIPPED_UNCHANGED = "skipped_unchanged"
 
 
-def _normalize_data_month(data_month) -> date:
-    """Accept YYYY-MM string, date, or datetime; return first day of month as date."""
+def _normalize_data_month(data_month) -> date | None:
+    """Accept YYYY-MM string, date, or datetime; return first day of month as date.
+
+    None passes through (the column is nullable).
+    """
+    if data_month is None:
+        return None
     if isinstance(data_month, date) and not isinstance(data_month, datetime):
         return data_month.replace(day=1)
     if isinstance(data_month, datetime):
@@ -63,7 +68,8 @@ def already_ingested(engine: Engine, source_name: str, sha256: str) -> bool:
 def record_source_file(engine: Engine, *, source_name: str, filename: str, 
                         url: str, sha256: str, size_bytes: int,
                         schema_version: str, raw_key: str, row_count: int,
-                        data_month: str | date | datetime, status: str | IngestStatus) -> int:
+ data_month: str | date | datetime | None,
+ status: str | IngestStatus) -> int:
     if isinstance(status, IngestStatus):
         status = status.value
     data_month_norm = _normalize_data_month(data_month)

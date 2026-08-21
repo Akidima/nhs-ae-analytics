@@ -133,6 +133,21 @@ def _ensure_schema(conn) -> None:
 
 REQUIRED_COLUMNS = frozenset({"period", "org_code", "org_name"})
 
+def _dedupe(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop duplicate (period, org_code) rows, keeping the last occurrence.
+
+    The source grid can repeat a provider (e.g. amended blocks appended at the
+    bottom); the last occurrence is the most recent amendment. Without this,
+    duplicates flow into staging and create two 'current' SCD versions for the
+    same key.
+    """
+    dupes = df.duplicated(subset=["period", "org_code"])
+    if not dupes.any():
+        return df
+    log.warning("Dropping %d duplicate (period, org_code) rows (kept last)",
+                int(dupes.sum()))
+    return df.drop_duplicates(subset=["period", "org_code"], keep="last")
+
 def _validate(df: pd.DataFrame) -> None:
     """Validate input before load."""
     missing = REQUIRED_COLUMNS - set(df.columns)
@@ -151,8 +166,10 @@ def _validate(df: pd.DataFrame) -> None:
     
     dupes = df.duplicated(subset=["period", "org_code"])
     if dupes.any():
-        n_dupes = dupes.sum()
-        log.warning("Found %d duplicate (period, org_code) pairs; will be deduped", n_dupes)
+        n_dupes = int(dupes.sum())
+        log.warning(
+            "Found %d duplicate (period, org_code) pairs; "
+            "_dedupe will keep the last occurrence", n_dupes)
 
 CHUNKSIZE = 10000
 
@@ -183,6 +200,7 @@ def load(df: pd.DataFrame, *, source_file_name: str, source_file_hash: str, sour
         return 0
 
     _validate(out)
+    out = _dedupe(out)
 
     # Replace every month present in this batch (Sitrep = one month; safe if more)
     periods = [p for p in out["period"].dropna().unique().tolist()]

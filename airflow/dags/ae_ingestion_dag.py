@@ -79,16 +79,26 @@ def ae_ingestion():
             source_file_hash=meta["sha256"], source_url=meta["url"],
         )
         engine = staging_loader.get_engine()
-        data_month = (df["period"].max().date().isoformat()
+        # Contract: data_month is YYYY-MM (metadata._normalize_data_month rejects
+        # full dates). Mirrors ingestion/run.py.
+        data_month = (df["period"].max().strftime("%Y-%m")
                       if df["period"].notna().any() else None)
-        sid = m.record_source_file(
-            engine, source_name="Monthly A&E Time Series",
-            filename=meta["filename"], url=meta["url"], sha256=meta["sha256"],
-            size_bytes=len(content), schema_version=registry.schema_version,
-            raw_key=meta["key"], row_count=rows, data_month=data_month,
-            status="success",
-        )
-        changed = m.upsert_period_versions(engine, df, sid)
+        run_id = m.start_run(engine, dag_run_id=None)
+        try:
+            sid = m.record_source_file(
+                engine, source_name="Monthly A&E Time Series",
+                filename=meta["filename"], url=meta["url"], sha256=meta["sha256"],
+                size_bytes=len(content), schema_version=registry.schema_version,
+                raw_key=meta["key"], row_count=rows, data_month=data_month,
+                status="success",
+            )
+            changed = m.upsert_period_versions(engine, df, sid)
+            m.finish_run(engine, run_id, status="success", rows_loaded=rows,
+                         notes=f"changed_periods={changed}")
+        except Exception:
+            m.finish_run(engine, run_id, status="failed",
+                         notes="see task logs")
+            raise
         return {"status": "success", "rows": rows, "changed": changed}
 
     parse_and_load(download_to_raw(resolve_link()))

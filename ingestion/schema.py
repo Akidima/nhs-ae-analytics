@@ -96,8 +96,8 @@ def map_columns(source_labels: list[str], registry: Registry) -> MappingResult:
             # If it's optional and missing, we just silently move on.
             
         # Step 2: Find the "Drift" (Extra columns in Excel that aren't in our Rulebook)
-        result.unmapped_source = [
-            lbl for lbl in source_labels 
-            if lbl not in used_labels
-        ]
+    result.unmapped_source = [
+        lbl for lbl in source_labels
+        if lbl not in used_labels
+    ]
     return result

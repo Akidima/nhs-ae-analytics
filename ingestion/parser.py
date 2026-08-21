@@ -53,8 +53,8 @@ def _pick_sheet(sheets: dict[str, pd.DataFrame], registry: Registry) -> str:
     return max(sheets, key=lambda n: sheets[n].notna().sum().sum())
 
 def _find_header_row(df: pd.DataFrame, anchor: str) -> int:
-    anchor_l = anchor.strip().lower()
     """Find the row index that contains the header labels."""
+    anchor_l = anchor.strip().lower()
     for i in range(min(len(df), 40)): # Header is within the first ~40 rows
         row_vals = [str(v).strip().lower() for v in df.iloc[i].tolist()]
         if any(anchor_l == v or anchor_l in v for v in row_vals):
@@ -109,7 +109,6 @@ def _coerce(series, dtype):
         return s.where(s.notna() & (s.str.strip() != ""), other=pd.NA)
     # fallback: leave as-is rather than nuking to None
     return series
-    # ... (leave the rest of your existing code exactly as is) ...
 
 
 _MONTH_RX = re.compile(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+'?(\d{2,4})", re.IGNORECASE)
