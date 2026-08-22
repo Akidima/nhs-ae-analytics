@@ -116,6 +116,12 @@ html.light .site-head{background:rgba(255,255,255,.85)}
 .tick-item{font-family:var(--mono);font-size:13px;color:var(--muted);white-space:nowrap;display:flex;gap:10px;align-items:center}
 .tick-item b{color:var(--ink);font-weight:600}
 .tick-item .sw{width:8px;height:8px;border-radius:50%;flex:none}
+/* small screens: same marquee, proportioned down */
+@media (max-width:720px){
+  #ticker{padding:11px 0}
+  #ticker .track{gap:36px;animation-duration:34s}
+  .tick-item{font-size:11px;gap:8px}
+}
 
 /* ---------- section spacing ---------- */
 .sect{padding:clamp(90px,14vh,150px) 0}
@@ -989,12 +995,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=13" defer></script>
-<script src="data/data.js?v=13" defer></script>
-<script src="app.js?v=13" defer></script>
-<script src="data/geo.js?v=13" defer></script>
-<script src="data/uk_geo.js?v=13" defer></script>
-<script src="data/trust_hist.js?v=13" defer></script>
-<script src="map.js?v=13" defer></script>
+<script src="vendor/leaflet.js?v=14" defer></script>
+<script src="data/data.js?v=14" defer></script>
+<script src="app.js?v=14" defer></script>
+<script src="data/geo.js?v=14" defer></script>
+<script src="data/uk_geo.js?v=14" defer></script>
+<script src="data/trust_hist.js?v=14" defer></script>
+<script src="map.js?v=14" defer></script>
 </body>
 </html>

@@ -35,6 +35,7 @@ const geoByCode = new Map(GEO.map(g => [g[0], { lat: g[1], lon: g[2], src: g[3],
 /* ---------- selection store (single source of truth) ---------- */
 const listeners = [];
 let selected = null, hover = null;
+let interacted = false;              // true once a real user action picks a trust
 function select(code) { if (selected !== code) { selected = code; emit('select'); } }
 function setHover(code) { if (hover !== code) { hover = code; emit('hover'); } }
 function on(fn) { listeners.push(fn); }
@@ -77,7 +78,7 @@ function renderList(filter) {
     b.setAttribute('aria-selected', String(p[0] === selected));
     b.dataset.code = p[0];
     b.innerHTML = `<span>${p[1]}</span><span class="t-code">${p[0]} · ${fmtShort(p[3])} visits</span>`;
-    b.addEventListener('click', () => select(p[0]));
+    b.addEventListener('click', () => { interacted = true; select(p[0]); });
     b.addEventListener('pointerenter', () => setHover(p[0]));
     b.addEventListener('pointerleave', () => setHover(null));
     li.appendChild(b);
@@ -95,6 +96,7 @@ searchEl.addEventListener('input', () => {
 
 const jumpEl = document.querySelector('[data-jump]');
 if (jumpEl) jumpEl.addEventListener('click', function () {
+  interacted = true;
   select(this.dataset.jump);
 });
 
@@ -177,7 +179,7 @@ P.forEach(p => {
     { className: 'ae-tip', direction: 'top', offset: [0, -6], sticky: false, opacity: 1 });
   m.on('mouseover', () => setHover(p[0]));
   m.on('mouseout', () => setHover(null));
-  m.on('click', () => { skipFly = p[0]; select(p[0]); skipFly = null; });
+  m.on('click', () => { interacted = true; skipFly = p[0]; select(p[0]); skipFly = null; });
   m.addTo(map);
   markersByCode.set(p[0], m);
 });
@@ -491,8 +493,9 @@ on((sel, hov) => {
   if (rep) rep.scrollTop = 0;
   renderReport(sel);                // immediately — no skeleton, no delay
 
-  // narrow layouts stack the report below the map — bring it into view
-  if (rep && rep.getBoundingClientRect().top > window.innerHeight * .55)
+  // narrow layouts stack the report below the map — bring it into view,
+  // but only for genuine user selections (never on initial page load)
+  if (interacted && rep && rep.getBoundingClientRect().top > window.innerHeight * .55)
     rep.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'nearest' });
 
   // camera follows selections made from the list / links (not marker clicks)

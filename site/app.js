@@ -5,6 +5,13 @@
 (function () {
 'use strict';
 
+/* fresh visits and reloads start at the top; explicit #section anchors
+   still jump natively, and bfcache back/forward keeps its position */
+try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+window.addEventListener('load', () => {
+  if (!document.getElementById(location.hash.slice(1))) window.scrollTo(0, 0);
+});
+
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const M = window.AE_MONTHLY, P = window.AE_PROVIDERS, PM = window.AE_PM;
 const NS = 'http://www.w3.org/2000/svg';
@@ -92,7 +99,11 @@ function hideTip() { tip.classList.remove('on'); }
   }
   size(); seed();
   if (!REDUCED) raf = requestAnimationFrame(step);
-  window.addEventListener('resize', () => { if (!running) { size(); seed(); } }, { passive: true });
+  let resizeTmr;
+  window.addEventListener('resize', () => {          // rotation, URL-bar collapse
+    clearTimeout(resizeTmr);
+    resizeTmr = setTimeout(() => { size(); seed(); }, 150);
+  }, { passive: true });
   window.addEventListener('pointermove', e => {
     const r = canvas.getBoundingClientRect();
     if (e.clientY < r.bottom) {
@@ -170,7 +181,14 @@ function hideTip() { tip.classList.remove('on'); }
   }
   function stop() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
   setRunning(true);
-  window.addEventListener('resize', () => { if (!raf) size(); }, { passive: true });
+  let resizeTmr;
+  window.addEventListener('resize', () => {          // rotation, URL-bar collapse
+    clearTimeout(resizeTmr);
+    resizeTmr = setTimeout(() => {
+      size();
+      if (REDUCED) { paint(0); stop(); }             // refresh the static frame
+    }, 150);
+  }, { passive: true });
   new IntersectionObserver(es => es.forEach(e =>
     setRunning(!document.hidden && e.isIntersecting)), { threshold: 0 }).observe(canvas);
   document.addEventListener('visibilitychange', () => {
