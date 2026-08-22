@@ -235,9 +235,10 @@ function hideTip() { tip.classList.remove('on'); }
     ['46 arrivals every minute, day and night', 'var(--warm)'],
     ['July 2015: the only month in eleven years to meet the 95% promise', 'var(--warm)']
   ];
-  const html = items.map(([t, c]) =>
-    `<span class="tick-item"><span class="sw" style="background:${c}"></span>${t}</span>`).join('');
-  track.innerHTML = html + html;
+  const mk = dup => items.map(([t, c]) =>
+    `<span class="tick-item${dup ? ' dup' : ''}"><span class="sw" style="background:${c}"></span>${t}</span>`).join('');
+  // second copy drives the desktop marquee loop; hidden on mobile
+  track.innerHTML = mk(false) + mk(true);
 })();
 
 /* ─────────────────────────── light / dark theme ─────────────────────────── */
