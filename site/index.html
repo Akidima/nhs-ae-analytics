@@ -411,6 +411,41 @@ body{padding-top:52px}
 .tr-stat .x{display:block;font-size:9px;color:var(--dim);margin-top:2px;line-height:1.25}
 .tr-stat.good{border-color:rgba(94,234,212,.3)} .tr-stat.good .v{color:var(--accent)}
 .tr-stat.hot{border-color:rgba(251,113,133,.35)} .tr-stat.hot .v{color:var(--hot)}
+.linklike{background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;font-size:10px;
+  text-decoration:underline;padding:0;min-height:auto;letter-spacing:.05em}
+.linklike:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+/* compare block */
+.tr-cmp-names{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;
+  font-size:11px;font-weight:650;line-height:1.3}
+.tr-cmp-names span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr-cmp-names .a{color:var(--accent)} .tr-cmp-names .b{color:var(--cool)}
+.tr-cmp-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:baseline;
+  border-bottom:1px solid var(--line);padding:5px 0;font-size:11.5px}
+.tr-cmp-row:last-child{border-bottom:none}
+.tr-cmp-row .n{color:var(--muted)}
+.tr-cmp-row .a{text-align:right;min-width:64px;font-weight:650;color:var(--accent)}
+.tr-cmp-row .b{text-align:right;min-width:64px;font-weight:650;color:var(--cool)}
+
+/* small multiples grid */
+.sm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;margin-top:16px}
+.sm-cell{border:1px solid var(--line);border-radius:9px;background:rgba(var(--wash),.45);
+  padding:7px 8px;text-align:left;color:inherit;font:inherit;cursor:pointer;
+  display:flex;flex-direction:column;gap:5px;transition:border-color .2s}
+.sm-cell:hover{border-color:var(--accent)}
+.sm-cell.sel{border-color:rgba(94,234,212,.55);background:rgba(94,234,212,.07)}
+.sm-cell.hot svg polyline{stroke:var(--hot)!important}
+.sm-cell svg{width:100%;height:auto;display:block}
+.sm-name{font-size:10px;color:var(--muted);line-height:1.25;height:24px;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sm-cell.sel .sm-name{color:var(--ink)}
+.sm-foot{display:flex;justify-content:space-between;align-items:baseline;
+  font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.04em}
+.sm-foot b{font-size:11px;color:var(--ink)}
+.sm-cell.hot .sm-foot b{color:var(--hot)}
+.sm-foot i{font-style:normal;text-transform:uppercase}
+.sm-nodata{display:flex;align-items:center;justify-content:center;height:26px;
+  font-family:var(--mono);font-size:8.5px;color:var(--dim)}
 .tr-block{margin-top:12px}
 .tr-block h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--dim);margin-bottom:10px}
@@ -798,6 +833,23 @@ body{padding-top:52px}
       </aside>
     </div>
   </div>
+
+  <!-- small multiples: one sparkline per trust, sorted best → worst -->
+  <div class="wrap">
+    <div class="viz reveal" id="sm-viz">
+      <div class="viz-head">
+        <div>
+          <div class="viz-title">Every trust at a glance</div>
+          <div class="viz-sub">One sparkline per trust — the share seen within four hours each month since April 2017.
+            Sorted best to worst on recent performance. Click a card to open its report on the map.</div>
+        </div>
+        <div class="legend">
+          <span class="li"><span class="sw" style="background:transparent;border-top:2px dashed var(--warm);height:0"></span>95% promise</span>
+        </div>
+      </div>
+      <div class="sm-grid" id="sm-grid"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ══════════════════ SECTION 4 · BIGGEST DISCOVERIES ══════════════════ -->
@@ -971,12 +1023,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=5" defer></script>
-<script src="data/data.js?v=5" defer></script>
-<script src="app.js?v=5" defer></script>
-<script src="data/geo.js?v=5" defer></script>
-<script src="data/uk_geo.js?v=5" defer></script>
-<script src="data/trust_hist.js?v=5" defer></script>
-<script src="map.js?v=5" defer></script>
+<script src="vendor/leaflet.js?v=6" defer></script>
+<script src="data/data.js?v=6" defer></script>
+<script src="app.js?v=6" defer></script>
+<script src="data/geo.js?v=6" defer></script>
+<script src="data/uk_geo.js?v=6" defer></script>
+<script src="data/trust_hist.js?v=6" defer></script>
+<script src="map.js?v=6" defer></script>
 </body>
 </html>

@@ -40,6 +40,15 @@ function setHover(code) { if (hover !== code) { hover = code; emit('hover'); } }
 function on(fn) { listeners.push(fn); }
 function emit() { listeners.forEach(f => f(selected, hover)); }
 
+/* ---------- shareable deep links (#CODE) ---------- */
+function syncHash(code) {
+  try { history.replaceState(null, '', code ? '#' + code : '#'); } catch (e) { /* no-op */ }
+}
+window.addEventListener('hashchange', () => {
+  const c = typeof location !== 'undefined' ? location.hash.slice(1) : '';
+  if (byCode.has(c) && c !== selected) select(c);
+});
+
 /* ---------- trust list (sidebar) ---------- */
 const listEl = document.getElementById('trust-list');
 const searchEl = document.getElementById('trust-search');
@@ -93,10 +102,10 @@ if (jumpEl) jumpEl.addEventListener('click', function () {
 const map = L.map('ukmap', {
   zoomControl: true,
   attributionControl: true,
-  minZoom: 4,
+  minZoom: 5,                        // can't zoom out far enough to see France
   maxZoom: 9,
   zoomSnap: 0.5,
-  worldCopyJump: true,
+  maxBoundsViscosity: 1.0,           // hard wall: no panning beyond the UK frame
   preferCanvas: true,
   scrollWheelZoom: !REDUCED          // reduced-motion users zoom with buttons/double-click
 });
@@ -131,10 +140,10 @@ window.addEventListener('ae-theme', () => {
   applyMarkerStates();
 });
 
-// frame Great Britain (+NI), keep users from panning into the void
+// frame Great Britain (+NI) and hard-limit panning to the UK — no France
 const GB_BOUNDS = L.latLngBounds([49.8, -8.2], [59.2, 2.0]);
 map.fitBounds(GB_BOUNDS, { padding: [8, 8] });
-map.setMaxBounds(GB_BOUNDS.pad(0.75));
+map.setMaxBounds(GB_BOUNDS);
 const HOME = { center: map.getCenter(), zoom: map.getZoom() };
 
 /* ---------- trust markers ---------- */
@@ -217,6 +226,110 @@ function animatePanel() {
   trBody.classList.remove('tr-in');
   void trBody.offsetHeight;          // restart the entrance animation
   trBody.classList.add('tr-in');
+}
+
+function animatePanel() {
+  trBody.classList.remove('tr-in');
+  void trBody.offsetHeight;          // restart the entrance animation
+  trBody.classList.add('tr-in');
+}
+
+/* ---------- compare mode (pin up to two trusts) ---------- */
+let cmpCodes = [];
+function toggleCompare(code) {
+  const i = cmpCodes.indexOf(code);
+  if (i >= 0) cmpCodes.splice(i, 1);
+  else { if (cmpCodes.length >= 2) cmpCodes.shift(); cmpCodes.push(code); }
+  renderReport(selected);
+}
+function cmpSparkPath(code) {
+  const hist = unpackTrustHistory(code);
+  if (!hist) return '';
+  const pts = hist.filter(h => h.cov).map(h => 100 * h.w4 / h.att).filter(isFinite);
+  if (pts.length < 2) return '';
+  const W = 280, H = 74, pad = 4;
+  const y = v => pad + (1 - (Math.min(Math.max(v, 40), 100) - 40) / 60) * (H - 2 * pad);
+  const line = pts.map((v, i) => (i ? 'L' : 'M') + (pad + i / (pts.length - 1) * (W - 2 * pad)).toFixed(1) + ',' + y(v).toFixed(1)).join('');
+  return `<path d="${line}" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+function buildCompareBlock() {
+  if (!cmpCodes.length) return '';
+  if (cmpCodes.length < 2) {
+    const t0 = byCode.get(cmpCodes[0]);
+    return `<div class="tr-block"><h4>Compare</h4><div class="tr-note">Pinned <b>${t0 ? t0.name : cmpCodes[0]}</b>.
+      Open another trust and press <b>+ compare</b> to see them side by side.
+      <button class="linklike" id="tr-cmp-clear">clear</button></div></div>`;
+  }
+  const [ca, cb] = cmpCodes, ta = byCode.get(ca), tb = byCode.get(cb);
+  if (!ta || !tb) { cmpCodes = []; return ''; }
+  const perf = x => x != null ? x.toFixed(1) + '%' : '—';
+  const pa = ta.attCov ? 100 * ta.w4 / ta.attCov : null;
+  const pb = tb.attCov ? 100 * tb.w4 / tb.attCov : null;
+  const brT = t => t.br != null ? t.br : (t.attCov != null ? Math.max(t.attCov - t.w4, 0) : null);
+  const rows = [
+    ['attended · last 12 mo', fmtFull(ta.att), fmtFull(tb.att)],
+    ['left within 4 hours', perf(pa), perf(pb)],
+    ['waited longer than 4h', brT(ta) != null ? fmtFull(brT(ta)) : '—', brT(tb) != null ? fmtFull(brT(tb)) : '—'],
+    ['waited on a trolley 12h+', ta.dta != null ? fmtFull(ta.dta) : '—', tb.dta != null ? fmtFull(tb.dta) : '—'],
+    ['emergency admissions', ta.adm != null ? fmtFull(ta.adm) : '—', tb.adm != null ? fmtFull(tb.adm) : '—'],
+    ['met the 95% promise', `${ta.met} of ${ta.months}`, `${tb.met} of ${tb.months}`]
+  ];
+  const sa = cmpSparkPath(ca).replace('<path ', '<path stroke="var(--accent)" ');
+  const sb = cmpSparkPath(cb).replace('<path ', '<path stroke="var(--cool)" ');
+  return `<div class="tr-block"><h4>Side by side
+      <button class="linklike" id="tr-cmp-clear">clear</button></h4>
+    <div class="tr-cmp-names"><span class="a">${ta.name}</span><span class="b">${tb.name}</span></div>
+    <div class="tr-cmp">${rows.map(r =>
+      `<div class="tr-cmp-row"><span class="n">${r[0]}</span><span class="a num">${r[1]}</span><span class="b num">${r[2]}</span></div>`).join('')}
+    </div>
+    ${sa || sb ? `<svg class="tr-spark" viewBox="0 0 280 74" role="img" aria-label="Monthly four-hour performance of both trusts overlaid">
+      <line x1="4" x2="276" y1="${(4 + (1 - (95 - 40) / 60) * 66).toFixed(1)}" y2="${(4 + (1 - (95 - 40) / 60) * 66).toFixed(1)}"
+        stroke="#fbbf24" stroke-dasharray="4 4" opacity=".8"/>${sa}${sb}</svg>
+      <div class="tr-note"><span style="color:var(--accent)">▬ first trust</span> ·
+      <span style="color:var(--cool)">▬ second trust</span> · dashed gold is the 95% promise.</div>` : ''}`;
+}
+
+/* ---------- small multiples: every trust at a glance ---------- */
+let smCells = null;                  // code → cell element, set once built
+function buildSmallMultiples() {
+  const grid = document.getElementById('sm-grid');
+  if (!grid || grid.dataset.built) return;
+  grid.dataset.built = '1';
+  const frag = document.createDocumentFragment();
+  smCells = new Map();
+  const items = P.filter(p => p[3] > 0 && geoByCode.has(p[0])).map(p => {
+    const t = byCode.get(p[0]);
+    return { t, perf: t.attCov ? Math.round(100 * t.w4 / t.attCov * 10) / 10 : null,
+             hist: unpackTrustHistory(p[0]) };
+  }).sort((a, b) => (b.perf ?? -1) - (a.perf ?? -1));
+  items.forEach(({ t, perf, hist }) => {
+    let svg = '';
+    if (hist) {
+      const pts = hist.filter(h => h.cov).map(h => 100 * h.w4 / h.att).filter(isFinite);
+      if (pts.length > 3) {
+        const ptsStr = pts.map((v, i) =>
+          (2 + i / (pts.length - 1) * 96).toFixed(1) + ',' +
+          (2 + (1 - (Math.min(Math.max(v, 40), 100) - 40) / 60) * 22).toFixed(1)).join(' ');
+        svg = `<svg viewBox="0 0 100 26" aria-hidden="true">
+          <line x1="2" x2="98" y1="${(2 + (1 - .9167) * 22).toFixed(1)}" y2="${(2 + (1 - .9167) * 22).toFixed(1)}"
+            stroke="#fbbf24" stroke-width="1" stroke-dasharray="3 3" opacity=".8"/>
+          <polyline points="${ptsStr}" fill="none" stroke="${perf != null && perf < 60 ? 'var(--hot)' : 'var(--accent)'}"
+            stroke-width="1.5"/></svg>`;
+      } else svg = `<span class="sm-nodata">sparse history</span>`;
+    } else svg = `<span class="sm-nodata">no monthly data</span>`;
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'sm-cell' + (perf != null && perf < 60 ? ' hot' : '');
+    cell.dataset.code = t.code;
+    cell.setAttribute('aria-label', `${t.name}. ${perf != null ? perf.toFixed(0) + '% within four hours' : 'No published waits'}. Open report`);
+    cell.innerHTML = `<span class="sm-name">${t.name}</span>${svg}
+      <span class="sm-foot"><b class="num">${perf != null ? perf.toFixed(0) + '%' : '—'}</b><i>${t.kind === 'major' ? 'major A&E' : t.kind === 'walkin' ? 'walk-in' : 'specialist'}</i></span>`;
+    cell.addEventListener('click', () => select(t.code));
+    smCells.set(t.code, cell);
+    frag.appendChild(cell);
+  });
+  grid.appendChild(frag);
+  smCells.forEach((c, code) => c.classList.toggle('sel', code === selected));
 }
 
 function renderReport(code) {
@@ -359,9 +472,12 @@ function renderReport(code) {
         : '<b>Single-speciality service.</b> e.g. eye casualty — low volume, specialist care.'}</div></div>`;
   }
 
+  const cmpBtn = `<button class="linklike" id="tr-compare"
+    title="${cmpCodes.includes(code) ? 'Remove from comparison' : 'Pin for side-by-side comparison'}">${cmpCodes.includes(code) ? '✓ comparing' : '+ compare'}</button>`;
+
   trBody.hidden = false;
   trBody.innerHTML = `
-    <div class="tr-kicker">Trust report<span style="color:var(--dim)">·</span><span class="num">${code}</span></div>
+    <div class="tr-kicker">Trust report<span style="color:var(--dim)">·</span><span class="num">${code}</span>${cmpBtn}</div>
     <div class="tr-name">${t.name}</div>
     <div class="tr-window num">${kindName} · ${t.months} reporting months · to ${mLabel(LAST_YM)}</div>
 
@@ -379,12 +495,18 @@ function renderReport(code) {
 
     ${splitHtml}
 
+    ${buildCompareBlock()}
+
     <div class="tr-block"><h4>About this location</h4>
       <div class="tr-note">${g.src === 'ods'
         ? `Placed at its registered headquarters postcode (<span class="num">${g.detail}</span>) via NHS Digital.`
         : g.src.startsWith('osm') ? 'Placed from OpenStreetMap hospital operator records.'
         : g.src === 'wd' ? 'Placed from its Wikidata headquarters coordinate.'
         : `Position approximate (${g.detail}) — no official coordinate was available.`}</div></div>`;
+  const btn = document.getElementById('tr-compare');
+  if (btn) btn.addEventListener('click', () => toggleCompare(code));
+  const clear = document.getElementById('tr-cmp-clear');
+  if (clear) clear.addEventListener('click', () => { cmpCodes = []; renderReport(selected); });
   animatePanel();
 }
 
@@ -404,6 +526,9 @@ on((sel, hov) => {
   if (sel === lastSel) return;      // hover-only change → stop here
   lastSel = sel;
   if (!sel) return;                 // panel always keeps the last report
+
+  syncHash(sel);
+  if (smCells) smCells.forEach((c, code) => c.classList.toggle('sel', code === sel));
 
   trBody.hidden = false;
   const rep = document.getElementById('trust-report');
@@ -431,8 +556,17 @@ document.getElementById('map-reset').addEventListener('click', () => {
 renderList('');
 applyMarkerStates();
 
-// open with a story already on screen — the panel is never empty
-select(byCode.has('RRK') ? 'RRK' : P.find(p => p[3] > 0)[0]);
+// small multiples build lazily once scrolled near
+const smViz = document.getElementById('sm-viz');
+if (smViz) new IntersectionObserver((es, io) => es.forEach(e => {
+  if (!e.isIntersecting) return;
+  io.disconnect();
+  buildSmallMultiples();
+}), { rootMargin: '300px' }).observe(smViz);
+
+// open with a story on screen: #CODE deep link wins, else Birmingham
+const hashReq = typeof location !== 'undefined' ? location.hash.slice(1) : '';
+select(byCode.has(hashReq) ? hashReq : (byCode.has('RRK') ? 'RRK' : P.find(p => p[3] > 0)[0]));
 
 // Leaflet initialised while the section may be display-blocked far below the
 // fold — re-measure once it actually scrolls into view.
