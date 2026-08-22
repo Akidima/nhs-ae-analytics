@@ -289,44 +289,6 @@ function buildCompareBlock() {
       <span style="color:var(--cool)">▬ second trust</span> · dashed gold is the 95% promise.</div>` : ''}`;
 }
 
-/* ---------- every trust at a glance: standalone visual gallery ---------- */
-function buildSmallMultiples() {
-  const grid = document.getElementById('sm-grid');
-  if (!grid || grid.dataset.built) return;
-  grid.dataset.built = '1';
-  const frag = document.createDocumentFragment();
-  const items = P.filter(p => p[3] > 0 && geoByCode.has(p[0])).map(p => {
-    const t = byCode.get(p[0]);
-    return { name: t.name, kind: t.kind,
-             perf: t.attCov ? Math.round(100 * t.w4 / t.attCov * 10) / 10 : null,
-             hist: unpackTrustHistory(p[0]) };
-  }).sort((a, b) => (b.perf ?? -1) - (a.perf ?? -1));
-  items.forEach(({ name, perf, hist }, i) => {
-    let svg = '';
-    if (hist) {
-      const pts = hist.filter(h => h.cov).map(h => 100 * h.w4 / h.att).filter(isFinite);
-      if (pts.length > 3) {
-        const ptsStr = pts.map((v, j) =>
-          (2 + j / (pts.length - 1) * 96).toFixed(1) + ',' +
-          (2 + (1 - (Math.min(Math.max(v, 40), 100) - 40) / 60) * 22).toFixed(1)).join(' ');
-        svg = `<svg viewBox="0 0 100 26" aria-hidden="true">
-          <line x1="2" x2="98" y1="${(2 + (1 - .9167) * 22).toFixed(1)}" y2="${(2 + (1 - .9167) * 22).toFixed(1)}"
-            stroke="#fbbf24" stroke-width="1" stroke-dasharray="3 3" opacity=".8"/>
-          <polyline points="${ptsStr}" fill="none" stroke="${perf != null && perf < 60 ? 'var(--hot)' : 'var(--accent)'}"
-            stroke-width="1.5"/></svg>`;
-      } else svg = `<span class="sm-nodata">sparse history</span>`;
-    } else svg = `<span class="sm-nodata">no monthly data</span>`;
-    const cell = document.createElement('div');
-    cell.className = 'sm-cell' + (perf != null && perf < 60 ? ' hot' : '');
-    cell.setAttribute('aria-label', `${name}. ${perf != null ? perf.toFixed(0) + '% within four hours' : 'No published waits'}`);
-    cell.innerHTML = `<span class="sm-name">${name}</span>${svg}
-      <span class="sm-foot num">${perf != null ? perf.toFixed(0) + '%' : '—'}</span>`;
-    cell.style.animationDelay = `${Math.min(i * 8, 700)}ms`;   // gentle cascade
-    frag.appendChild(cell);
-  });
-  grid.appendChild(frag);
-}
-
 function renderReport(code) {
   const t = byCode.get(code), g = geoByCode.get(code);
   if (!t || !g) return;
@@ -549,14 +511,6 @@ document.getElementById('map-reset').addEventListener('click', () => {
 
 renderList('');
 applyMarkerStates();
-
-// small multiples build lazily once scrolled near
-const smViz = document.getElementById('sm-viz');
-if (smViz) new IntersectionObserver((es, io) => es.forEach(e => {
-  if (!e.isIntersecting) return;
-  io.disconnect();
-  buildSmallMultiples();
-}), { rootMargin: '300px' }).observe(smViz);
 
 // open with a story on screen: #CODE deep link wins, else Birmingham
 const hashReq = typeof location !== 'undefined' ? location.hash.slice(1) : '';
