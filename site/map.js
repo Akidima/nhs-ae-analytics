@@ -214,6 +214,8 @@ function fmtFull(n) { return n == null ? '—' : n.toLocaleString('en-GB'); }
 
 function showLoading() {
   trBody.hidden = false; trEmpty.hidden = true;
+  const rep = document.getElementById('trust-report');
+  if (rep) rep.scrollTop = 0;
   trBody.innerHTML = '<div class="tr-loading"><i style="width:70%"></i><i style="width:95%"></i>' +
     '<i style="width:80%"></i><i style="width:90%"></i><i style="width:60%"></i></div>';
 }
@@ -380,7 +382,7 @@ function renderReport(code) {
     <div class="tr-badges">
       <span class="tr-badge ${t.kind}">${kindName}</span>
       <span class="tr-badge">${t.months} reporting months</span>
-      <span class="tr-badge">to ${LAST_YM}</span>
+      <span class="tr-badge">to ${mLabel(LAST_YM)}</span>
     </div>
 
     <div class="tr-block" style="margin-top:14px"><h4>Rolling twelve months</h4>
@@ -435,7 +437,13 @@ on((sel, hov) => {
   const token = ++reportToken;
   // small delay lets the loading state paint (and feels cinematic without lying)
   setTimeout(() => {
-    if (token === reportToken && selected === sel) renderReport(sel);
+    if (token === reportToken && selected === sel) {
+      renderReport(sel);
+      // narrow layouts stack the report below the map — bring it into view
+      const rep = document.getElementById('trust-report');
+      if (rep && rep.getBoundingClientRect().top > window.innerHeight * .55)
+        rep.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'nearest' });
+    }
   }, REDUCED ? 0 : 180);
 
   // camera follows selections made from the list / links (not marker clicks)
