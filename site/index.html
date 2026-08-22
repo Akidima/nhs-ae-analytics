@@ -446,6 +446,18 @@ body{padding-top:52px}
 .sm-foot i{font-style:normal;text-transform:uppercase}
 .sm-nodata{display:flex;align-items:center;justify-content:center;height:26px;
   font-family:var(--mono);font-size:8.5px;color:var(--dim)}
+.sm-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.sm-controls .seg{margin-bottom:0}
+.sm-search{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--line2);color:var(--ink);
+  border-radius:999px;padding:8px 14px;font-size:12.5px;font-family:var(--sans)}
+.sm-search::placeholder{color:var(--dim)}
+.sm-search:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.sm-sort{background:var(--bg);border:1px solid var(--line2);color:var(--muted);border-radius:999px;
+  padding:9px 12px;font-size:11.5px;font-family:var(--mono);cursor:pointer;min-height:44px}
+.sm-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sm-delta{font-family:var(--mono);font-size:9px}
+.sm-delta.up{color:var(--accent)} .sm-delta.down{color:var(--hot)}
+.sm-cell.hov{border-color:var(--line2);background:rgba(148,163,184,.08)}
 .tr-block{margin-top:12px}
 .tr-block h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--dim);margin-bottom:10px}
@@ -841,11 +853,29 @@ body{padding-top:52px}
         <div>
           <div class="viz-title">Every trust at a glance</div>
           <div class="viz-sub">One sparkline per trust — the share seen within four hours each month since April 2017.
-            Sorted best to worst on recent performance. Click a card to open its report on the map.</div>
+            Filter, search and re-sort the board; click a card to open its report on the map.</div>
         </div>
         <div class="legend">
           <span class="li"><span class="sw" style="background:transparent;border-top:2px dashed var(--warm);height:0"></span>95% promise</span>
+          <span class="li sm-delta down">▼pp</span><span>vs England avg</span>
         </div>
+      </div>
+      <div class="sm-controls">
+        <div class="seg" id="sm-kind" role="group" aria-label="Filter trusts by type">
+          <button data-kind="all" aria-pressed="true">All</button>
+          <button data-kind="major" aria-pressed="false">Big A&amp;E</button>
+          <button data-kind="walkin" aria-pressed="false">Walk-in</button>
+          <button data-kind="other" aria-pressed="false">Specialist</button>
+        </div>
+        <input type="search" id="sm-search" class="sm-search" placeholder="Search trusts…" autocomplete="off"
+          aria-label="Search the trust board">
+        <select id="sm-sort" class="sm-sort" aria-label="Sort the trust board">
+          <option value="perf">worst performance first</option>
+          <option value="best">best performance first</option>
+          <option value="att">most attendances</option>
+          <option value="dta">most trolley waits</option>
+          <option value="name">A – Z</option>
+        </select>
       </div>
       <div class="sm-grid" id="sm-grid"></div>
     </div>
@@ -1023,12 +1053,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=6" defer></script>
-<script src="data/data.js?v=6" defer></script>
-<script src="app.js?v=6" defer></script>
-<script src="data/geo.js?v=6" defer></script>
-<script src="data/uk_geo.js?v=6" defer></script>
-<script src="data/trust_hist.js?v=6" defer></script>
-<script src="map.js?v=6" defer></script>
+<script src="vendor/leaflet.js?v=7" defer></script>
+<script src="data/data.js?v=7" defer></script>
+<script src="app.js?v=7" defer></script>
+<script src="data/geo.js?v=7" defer></script>
+<script src="data/uk_geo.js?v=7" defer></script>
+<script src="data/trust_hist.js?v=7" defer></script>
+<script src="map.js?v=7" defer></script>
 </body>
 </html>

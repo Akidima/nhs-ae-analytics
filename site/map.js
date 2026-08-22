@@ -289,20 +289,64 @@ function buildCompareBlock() {
       <span style="color:var(--cool)">▬ second trust</span> · dashed gold is the 95% promise.</div>` : ''}`;
 }
 
-/* ---------- small multiples: every trust at a glance ---------- */
-let smCells = null;                  // code → cell element, set once built
+/* ---------- trust league board: every trust at a glance ---------- */
+let smCells = null;                  // code → cell element
+const smState = { sort: 'perf', kind: 'all', q: '' };
+const ENG_AVG = 75.1;
+
+function renderSmGrid() {
+  const grid = document.getElementById('sm-grid');
+  if (!grid || !smCells) return;
+  const q = smState.q.trim().toLowerCase();
+  const vis = [...smCells.values()].filter(c => {
+    const t = byCode.get(c.dataset.code);
+    if (!t) return false;
+    if (smState.kind !== 'all' && t.kind !== smState.kind) return false;
+    if (q && !(t.name.toLowerCase().includes(q) || c.dataset.code.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const metric = c => {
+    const t = byCode.get(c.dataset.code);
+    if (smState.sort === 'att') return t.att;
+    if (smState.sort === 'dta') return t.dta ?? -1;
+    return t.attCov ? t.w4 / t.attCov : -1;          // performance
+  };
+  vis.sort((a, b) => smState.sort === 'name'
+    ? byCode.get(a.dataset.code).name.localeCompare(byCode.get(b.dataset.code).name)
+    : smState.sort === 'perf' ? metric(a) - metric(b)   // worst first
+    : metric(b) - metric(a));                           // others: biggest first
+  vis.forEach(c => grid.appendChild(c));                // reorder keeps nodes alive
+}
+
+function bindSmControls() {
+  const seg = document.getElementById('sm-kind');
+  if (seg) seg.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    smState.kind = btn.dataset.kind;
+    renderSmGrid();
+  }));
+  const search = document.getElementById('sm-search');
+  if (search) {
+    let tmr;
+    search.addEventListener('input', () => {
+      clearTimeout(tmr);
+      tmr = setTimeout(() => { smState.q = search.value; renderSmGrid(); }, 120);
+    });
+  }
+  const sortSel = document.getElementById('sm-sort');
+  if (sortSel) sortSel.addEventListener('change', () => { smState.sort = sortSel.value; renderSmGrid(); });
+}
+
 function buildSmallMultiples() {
   const grid = document.getElementById('sm-grid');
   if (!grid || grid.dataset.built) return;
   grid.dataset.built = '1';
   const frag = document.createDocumentFragment();
   smCells = new Map();
-  const items = P.filter(p => p[3] > 0 && geoByCode.has(p[0])).map(p => {
+  P.filter(p => p[3] > 0 && geoByCode.has(p[0])).forEach(p => {
     const t = byCode.get(p[0]);
-    return { t, perf: t.attCov ? Math.round(100 * t.w4 / t.attCov * 10) / 10 : null,
-             hist: unpackTrustHistory(p[0]) };
-  }).sort((a, b) => (b.perf ?? -1) - (a.perf ?? -1));
-  items.forEach(({ t, perf, hist }) => {
+    const perf = t.attCov ? Math.round(100 * t.w4 / t.attCov * 10) / 10 : null;
+    const hist = unpackTrustHistory(p[0]);
     let svg = '';
     if (hist) {
       const pts = hist.filter(h => h.cov).map(h => 100 * h.w4 / h.att).filter(isFinite);
@@ -317,19 +361,27 @@ function buildSmallMultiples() {
             stroke-width="1.5"/></svg>`;
       } else svg = `<span class="sm-nodata">sparse history</span>`;
     } else svg = `<span class="sm-nodata">no monthly data</span>`;
+    let delta = '';
+    if (perf != null) {
+      const d = Math.round((perf - ENG_AVG) * 10) / 10;
+      delta = `<span class="sm-delta num ${d >= 0 ? 'up' : 'down'}"
+        title="${d >= 0 ? '+' : ''}${d.toFixed(1)}pp vs England average">${d >= 0 ? '▲' : '▼'}${Math.abs(d).toFixed(0)}</span>`;
+    }
     const cell = document.createElement('button');
     cell.type = 'button';
     cell.className = 'sm-cell' + (perf != null && perf < 60 ? ' hot' : '');
     cell.dataset.code = t.code;
     cell.setAttribute('aria-label', `${t.name}. ${perf != null ? perf.toFixed(0) + '% within four hours' : 'No published waits'}. Open report`);
     cell.innerHTML = `<span class="sm-name">${t.name}</span>${svg}
-      <span class="sm-foot"><b class="num">${perf != null ? perf.toFixed(0) + '%' : '—'}</b><i>${t.kind === 'major' ? 'major A&E' : t.kind === 'walkin' ? 'walk-in' : 'specialist'}</i></span>`;
+      <span class="sm-foot"><b class="num">${perf != null ? perf.toFixed(0) + '%' : '—'}</b>${delta}<i>${t.kind === 'major' ? 'major A&E' : t.kind === 'walkin' ? 'walk-in' : 'specialist'}</i></span>`;
     cell.addEventListener('click', () => select(t.code));
+    cell.addEventListener('pointerenter', () => setHover(t.code));
+    cell.addEventListener('pointerleave', () => setHover(null));
     smCells.set(t.code, cell);
     frag.appendChild(cell);
   });
   grid.appendChild(frag);
-  smCells.forEach((c, code) => c.classList.toggle('sel', code === selected));
+  renderSmGrid();
 }
 
 function renderReport(code) {
@@ -528,7 +580,10 @@ on((sel, hov) => {
   if (!sel) return;                 // panel always keeps the last report
 
   syncHash(sel);
-  if (smCells) smCells.forEach((c, code) => c.classList.toggle('sel', code === sel));
+  if (smCells) smCells.forEach((c, code) => {
+    c.classList.toggle('sel', code === sel);
+    c.classList.toggle('hov', code === hov);
+  });
 
   trBody.hidden = false;
   const rep = document.getElementById('trust-report');
@@ -563,6 +618,7 @@ if (smViz) new IntersectionObserver((es, io) => es.forEach(e => {
   io.disconnect();
   buildSmallMultiples();
 }), { rootMargin: '300px' }).observe(smViz);
+bindSmControls();
 
 // open with a story on screen: #CODE deep link wins, else Birmingham
 const hashReq = typeof location !== 'undefined' ? location.hash.slice(1) : '';
