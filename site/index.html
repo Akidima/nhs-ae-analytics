@@ -389,11 +389,9 @@ body{padding-top:52px}
   background:rgba(var(--panel-wash),.55);scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 .tr-empty{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:12.5px;height:100%;
   justify-content:center;text-align:center;padding:16px 8px}
-.tr-empty-glyph{font-family:var(--serif);font-size:26px;color:var(--dim);line-height:1}
-.tr-empty .hint{font-size:11.5px;color:var(--dim);line-height:1.5}
-.linklike{background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;
-  text-decoration:underline;padding:0;min-height:auto}
-.linklike:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.tr-in{animation:trIn .4s cubic-bezier(.22,.6,.2,1) both}
+@keyframes trIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.tr-in{animation:none}}
 
 .tr-kicker{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;
   letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
@@ -796,14 +794,9 @@ body{padding-top:52px}
         <button class="map-reset" id="map-reset" title="Reset view" aria-label="Reset map view">⌂</button>
       </div>
 
-      <!-- right: selected trust report -->
+      <!-- right: selected trust report (opens with Birmingham pre-selected) -->
       <aside class="trust-report" id="trust-report" aria-live="polite">
-        <div class="tr-empty" id="tr-empty">
-          <span class="tr-empty-glyph" aria-hidden="true">⌖</span>
-          <b>Select a trust to see its story.</b>
-          <span class="hint">Click a marker or search the list — try <button class="linklike" data-jump="RRK">Birmingham</button></span>
-        </div>
-        <div class="tr-body" id="tr-body" hidden></div>
+        <div class="tr-body" id="tr-body"></div>
       </aside>
     </div>
   </div>
@@ -980,12 +973,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=4" defer></script>
-<script src="data/data.js?v=4" defer></script>
-<script src="app.js?v=4" defer></script>
-<script src="data/geo.js?v=4" defer></script>
-<script src="data/uk_geo.js?v=4" defer></script>
-<script src="data/trust_hist.js?v=4" defer></script>
-<script src="map.js?v=4" defer></script>
+<script src="vendor/leaflet.js?v=5" defer></script>
+<script src="data/data.js?v=5" defer></script>
+<script src="app.js?v=5" defer></script>
+<script src="data/geo.js?v=5" defer></script>
+<script src="data/uk_geo.js?v=5" defer></script>
+<script src="data/trust_hist.js?v=5" defer></script>
+<script src="map.js?v=5" defer></script>
 </body>
 </html>

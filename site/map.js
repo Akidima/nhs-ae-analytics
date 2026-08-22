@@ -84,7 +84,8 @@ searchEl.addEventListener('input', () => {
   searchTimer = setTimeout(() => renderList(searchEl.value), 120);
 });
 
-document.querySelector('[data-jump]').addEventListener('click', function () {
+const jumpEl = document.querySelector('[data-jump]');
+if (jumpEl) jumpEl.addEventListener('click', function () {
   select(this.dataset.jump);
 });
 
@@ -190,7 +191,7 @@ function applyMarkerStates() {
 }
 
 /* ---------- report panel ---------- */
-const trBody = document.getElementById('tr-body'), trEmpty = document.getElementById('tr-empty');
+const trBody = document.getElementById('tr-body');
 function unpackTrustHistory(code) {
   const packed = window.AE_TRUST_HIST && window.AE_TRUST_HIST[code];
   if (!packed) return null;
@@ -212,12 +213,10 @@ function unpackTrustHistory(code) {
 }
 function fmtFull(n) { return n == null ? '—' : n.toLocaleString('en-GB'); }
 
-function showLoading() {
-  trBody.hidden = false; trEmpty.hidden = true;
-  const rep = document.getElementById('trust-report');
-  if (rep) rep.scrollTop = 0;
-  trBody.innerHTML = '<div class="tr-loading"><i style="width:70%"></i><i style="width:95%"></i>' +
-    '<i style="width:80%"></i><i style="width:90%"></i><i style="width:60%"></i></div>';
+function animatePanel() {
+  trBody.classList.remove('tr-in');
+  void trBody.offsetHeight;          // restart the entrance animation
+  trBody.classList.add('tr-in');
 }
 
 function renderReport(code) {
@@ -360,7 +359,7 @@ function renderReport(code) {
         : '<b>Single-speciality service.</b> e.g. eye casualty — low volume, specialist care.'}</div></div>`;
   }
 
-  trBody.hidden = false; trEmpty.hidden = true;
+  trBody.hidden = false;
   trBody.innerHTML = `
     <div class="tr-kicker">Trust report<span style="color:var(--dim)">·</span><span class="num">${code}</span></div>
     <div class="tr-name">${t.name}</div>
@@ -386,12 +385,12 @@ function renderReport(code) {
         : g.src.startsWith('osm') ? 'Placed from OpenStreetMap hospital operator records.'
         : g.src === 'wd' ? 'Placed from its Wikidata headquarters coordinate.'
         : `Position approximate (${g.detail}) — no official coordinate was available.`}</div></div>`;
+  animatePanel();
 }
 
 /* ---------- wire the store ---------- */
 let skipFly = null;                 // marker clicks already centre themselves
-let lastSel = null;                 // heavy work happens only when selection changes,
-let reportToken = 0;                // never on mere hover changes
+let lastSel = null;                 // work happens only when selection changes,
 
 on((sel, hov) => {
   // cheap visual states react to every emit (hover included)
@@ -402,23 +401,18 @@ on((sel, hov) => {
   });
   applyMarkerStates();
 
-  if (sel === lastSel) return;      // hover-only change → stop here (fixes map resize glitch)
+  if (sel === lastSel) return;      // hover-only change → stop here
   lastSel = sel;
+  if (!sel) return;                 // panel always keeps the last report
 
-  if (!sel) { trBody.hidden = true; trEmpty.hidden = false; return; }
+  trBody.hidden = false;
+  const rep = document.getElementById('trust-report');
+  if (rep) rep.scrollTop = 0;
+  renderReport(sel);                // immediately — no skeleton, no delay
 
-  showLoading();
-  const token = ++reportToken;
-  // small delay lets the loading state paint (and feels cinematic without lying)
-  setTimeout(() => {
-    if (token === reportToken && selected === sel) {
-      renderReport(sel);
-      // narrow layouts stack the report below the map — bring it into view
-      const rep = document.getElementById('trust-report');
-      if (rep && rep.getBoundingClientRect().top > window.innerHeight * .55)
-        rep.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'nearest' });
-    }
-  }, REDUCED ? 0 : 180);
+  // narrow layouts stack the report below the map — bring it into view
+  if (rep && rep.getBoundingClientRect().top > window.innerHeight * .55)
+    rep.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'nearest' });
 
   // camera follows selections made from the list / links (not marker clicks)
   if (sel !== skipFly) {
@@ -432,11 +426,13 @@ on((sel, hov) => {
 /* ---------- reset view ---------- */
 document.getElementById('map-reset').addEventListener('click', () => {
   map.flyTo(HOME.center, HOME.zoom, { duration: REDUCED ? 0 : .8 });
-  select(null);                      // store listener restores the empty panel
 });
 
 renderList('');
 applyMarkerStates();
+
+// open with a story already on screen — the panel is never empty
+select(byCode.has('RRK') ? 'RRK' : P.find(p => p[3] > 0)[0]);
 
 // Leaflet initialised while the section may be display-blocked far below the
 // fold — re-measure once it actually scrolls into view.
