@@ -3,8 +3,11 @@
    CARTO dark basemap + optional label overlay, one circle marker per NHS
    trust sized by attendances. Drag / pinch / zoom come from the library;
    hover tooltips, click-to-select, searchable sidebar and the report panel
-   keep working exactly as before. Selection lives in one store shared by
-   map, sidebar and report panel.                                            */
+   keep working exactly as before.
+
+   All trust→period→record→metric logic lives in data-core.js (AECORE) —
+   this file only renders what AECORE returns, so the map, sidebar,
+   comparison, regional context and export can never disagree.           */
 (function () {
 'use strict';
 
@@ -13,7 +16,7 @@ const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* Leaflet + data land deferred — poll briefly rather than fail */
 let waited = 0;
 (function boot() {
-  if (!(window.L && window.AE_MONTHLY && window.AE_PROVIDERS && window.AE_GEO)) {
+  if (!(window.L && window.AE_MONTHLY && window.AE_PROVIDERS && window.AE_GEO && window.AECORE)) {
     if ((waited += 100) > 12000) return;   // give up silently; page still works
     return setTimeout(boot, 100);
   }
@@ -21,42 +24,43 @@ let waited = 0;
 })();
 
 function start() {
-const M = window.AE_MONTHLY, P = window.AE_PROVIDERS, GEO = window.AE_GEO;
+const C = window.AECORE;
+const M = window.AE_MONTHLY, P = C.TRUSTS, GEO = window.AE_GEO;
 if (!document.getElementById('ukmap')) return;
 
-const LAST_YM = M[M.length - 1].p;
-const byCode = new Map(P.map(p => [p[0], {
-  code: p[0], name: p[1], kind: p[2], att: p[3],
-  t1: p[4], t3: p[5], attCov: p[6], w4: p[7],
-  br: p[8], adm: p[9], dta: p[10], met: p[12], months: p[11]
-}]));
-const geoByCode = new Map(GEO.map(g => [g[0], { lat: g[1], lon: g[2], src: g[3], detail: g[4] }]));
-
-/* ---------- selection store (single source of truth) ---------- */
+/* ---------- selection store (single source of truth) ----------
+   selected: trust code · selPeriod: YYYY-MM | null (= latest reported) */
 const listeners = [];
-let selected = null, hover = null;
+let selected = null, hover = null, selPeriod = null;
 let interacted = false;              // true once a real user action picks a trust
-function select(code) { if (selected !== code) { selected = code; emit('select'); } }
+function emit(ev) { listeners.forEach(f => f(selected, hover, ev)); }
+function select(code, ev) { if (selected !== code || ev === 'period') { selected = code; emit('select'); } }
 function setHover(code) { if (hover !== code) { hover = code; emit('hover'); } }
 function on(fn) { listeners.push(fn); }
-function emit() { listeners.forEach(f => f(selected, hover)); }
 
-/* ---------- shareable deep links (#CODE) ---------- */
-function syncHash(code) {
-  try { history.replaceState(null, '', code ? '#' + code : '#'); } catch (e) { /* no-op */ }
+/* ---------- shareable deep links (#CODE or #CODE@YYYY-MM) ---------- */
+function syncHash() {
+  try {
+    const h = C.buildHash(selected, selPeriod);
+    history.replaceState(null, '', h === '#' ? location.pathname + location.search : h);
+  } catch (e) { /* no-op */ }
 }
 window.addEventListener('hashchange', () => {
-  const c = typeof location !== 'undefined' ? location.hash.slice(1) : '';
-  if (byCode.has(c) && c !== selected) select(c);
+  const req = C.parseHash();
+  const codeChanged = !!req.code && req.code !== selected;
+  const periodChanged = (req.period || null) !== selPeriod;
+  if (!codeChanged && !periodChanged) return;      // plain section anchors fall through
+  selPeriod = req.period || null;
+  if (codeChanged) { interacted = true; select(req.code); }
+  else emit('period');
 });
 
-/* ---------- trust list (sidebar) ---------- */
+/* ---------- trust list (sidebar search) ---------- */
 const listEl = document.getElementById('trust-list');
 const searchEl = document.getElementById('trust-search');
 const countEl = document.getElementById('trust-count');
-countEl.textContent = `(${P.filter(p => p[3] > 0).length})`;
+countEl.textContent = `(${P.filter(p => p.att > 0).length})`;
 
-function fmtShort(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? Math.round(n/1e3)+'K' : ''+n; }
 function perfLabel(t) {
   if (!t.attCov) return 'waits not published';
   const pct = Math.round(100 * t.w4 / t.attCov);
@@ -64,7 +68,7 @@ function perfLabel(t) {
 }
 function renderList(filter) {
   const q = (filter || '').trim().toLowerCase();
-  const rows = P.filter(p => (!q || p[1].toLowerCase().includes(q)) && p[3] > 0);
+  const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q)) && p.att > 0);
   if (!rows.length) {
     listEl.innerHTML = '<li class="no-match">No trusts match that search.</li>';
     return;
@@ -73,13 +77,13 @@ function renderList(filter) {
   rows.forEach(p => {
     const li = document.createElement('li');
     const b = document.createElement('button');
-    b.className = 't-item' + (p[0] === selected ? ' sel' : '');
+    b.className = 't-item' + (p.code === selected ? ' sel' : '');
     b.setAttribute('role', 'option');
-    b.setAttribute('aria-selected', String(p[0] === selected));
-    b.dataset.code = p[0];
-    b.innerHTML = `<span>${p[1]}</span><span class="t-code">${p[0]} · ${fmtShort(p[3])} visits</span>`;
-    b.addEventListener('click', () => { interacted = true; select(p[0]); });
-    b.addEventListener('pointerenter', () => setHover(p[0]));
+    b.setAttribute('aria-selected', String(p.code === selected));
+    b.dataset.code = p.code;
+    b.innerHTML = `<span>${p.name}</span><span class="t-code">${p.code}${p.region ? ' · ' + p.region : ''} · ${C.fmtShort(p.att)} visits</span>`;
+    b.addEventListener('click', () => { interacted = true; select(p.code); });
+    b.addEventListener('pointerenter', () => setHover(p.code));
     b.addEventListener('pointerleave', () => setHover(null));
     li.appendChild(b);
     frag.appendChild(li);
@@ -148,190 +152,266 @@ map.fitBounds(GB_BOUNDS, { padding: [8, 8] });
 map.setMaxBounds(GB_BOUNDS);
 const HOME = { center: map.getCenter(), zoom: map.getZoom() };
 
-/* ---------- trust markers ---------- */
+/* ---------- markers ---------- */
+let mapMetric = 'type';               // current "Map by" selection
 function markerColors() {
   const cs = getComputedStyle(document.documentElement);
   return { accent: cs.getPropertyValue('--accent').trim() || '#5eead4',
-           cool: cs.getPropertyValue('--cool').trim() || '#7dd3fc' };
+           cool: cs.getPropertyValue('--cool').trim() || '#7dd3fc',
+           hot: cs.getPropertyValue('--hot').trim() || '#fb7185' };
 }
 const markersByCode = new Map();
 
-P.forEach(p => {
-  const g = geoByCode.get(p[0]);
-  if (!g || p[3] <= 0) return;                 // no coordinate or no recent activity
-  const t = byCode.get(p[0]);
+P.forEach(t => {
+  const g = C.GEO_BY_CODE.get(t.code);
+  if (!g || t.att <= 0) return;                 // no coordinate or no recent activity
   const major = t.kind === 'major';
-  const C = markerColors();
   const m = L.circleMarker([g.lat, g.lon], {
     radius: Math.min(11, major ? 4 + Math.sqrt(t.att) / 260 : 3),
-    color: major ? C.accent : C.cool,
+    color: markerColors().accent,
     weight: g.src === 'approx' ? 1.6 : 1.2,
     dashArray: g.src === 'approx' ? '2 2' : null,
     opacity: .85,
-    fillColor: major ? C.accent : C.cool,
+    fillColor: markerColors().accent,
     fillOpacity: major ? .72 : .5
   });
-  m.bindTooltip(
-    `<div class="mt-name">${t.name}</div>
-     <div class="mt-sub">${fmtShort(t.att)} visits · ${perfLabel(t)}</div>
-     <div class="mt-sub">${major ? 'big A&amp;E hospital' : 'walk-in / community sites'}${g.src === 'approx' ? ' · <b>≈</b> region-level position' : ''}</div>
-     <div class="mt-sub" style="margin-top:3px;color:#5c6a82">click for full report</div>`,
-    { className: 'ae-tip', direction: 'top', offset: [0, -6], sticky: false, opacity: 1 });
-  m.on('mouseover', () => setHover(p[0]));
+  m.on('mouseover', () => setHover(t.code));
   m.on('mouseout', () => setHover(null));
-  m.on('click', () => { interacted = true; select(p[0]); });
+  m.on('click', () => { interacted = true; select(t.code); });
+  m.bindTooltip(markerTooltipHtml(t.code),
+    { className: 'ae-tip', direction: 'top', offset: [0, -6], sticky: false, opacity: 1 });
   m.addTo(map);
-  markersByCode.set(p[0], m);
+  markersByCode.set(t.code, m);
 });
 
+function markerTooltipHtml(code) {
+  const t = C.BY_CODE.get(code), g = C.GEO_BY_CODE.get(code);
+  const metricLine = mapMetricLine(code);
+  return `<div class="mt-name">${t.name}</div>
+     <div class="mt-sub">${C.fmtShort(t.att)} visits${t.attCov ? ' · ' + perfLabel(t) : ''}</div>
+     ${metricLine ? `<div class="mt-sub">${metricLine}</div>` : ''}
+     <div class="mt-sub">${t.kind === 'major' ? 'big A&amp;E hospital' : t.kind === 'walkin' ? 'walk-in / community sites' : 'single-speciality site'}${g.src === 'approx' ? ' · <b>≈</b> region-level position' : ''}</div>
+     <div class="mt-sub" style="margin-top:3px;color:#5c6a82">click for full report</div>`;
+}
+
+/* ---------- Map-by control (analytical colouring) ---------- */
+const mapByEl = document.getElementById('map-by');
+const legendEl = document.getElementById('map-legend');
+
+function mapMetricLine(code) {
+  if (mapMetric === 'type') return '';
+  const def = C.MAP_METRICS[mapMetric];
+  const v = C.mapMetricValue(mapMetric, code);
+  if (mapMetric === 'w4pct') return v == null ? `${def.label}: waits not published` : `${def.label}: ${v.toFixed(1)}%`;
+  return `${def.label}: ${v == null ? 'not published' : C.fmt(v)}`;
+}
+
+function renderLegend() {
+  if (!legendEl) return;
+  const def = C.MAP_METRICS[mapMetric];
+  if (!def.buckets) {
+    legendEl.innerHTML = '<span class="ml-title">Coloured by front-door type:</span>' +
+      '<span class="ml-item"><span class="ml-sw" style="background:var(--accent)"></span>major A&amp;E</span>' +
+      '<span class="ml-item"><span class="ml-sw" style="background:var(--cool)"></span>walk-in / community</span>' +
+      '<span class="ml-note">dot size = attendances, last 12 months</span>';
+    return;
+  }
+  legendEl.innerHTML = `<span class="ml-title">${def.label}:</span>` +
+    def.buckets.map(b => `<span class="ml-item"><span class="ml-sw" style="background:${b.color}"></span>${b.label}</span>`).join('') +
+    '<span class="ml-note">grey = not published · dot size = attendances</span>';
+}
+
 function applyMarkerStates() {
-  const C = markerColors();
+  const Cs = markerColors();
   markersByCode.forEach((m, code) => {
     const isSel = code === selected, isHov = code === hover;
-    const t = byCode.get(code);
+    const t = C.BY_CODE.get(code);
     const base = Math.min(11, t.kind === 'major' ? 4 + Math.sqrt(t.att) / 260 : 3);
+    let color;
+    if (mapMetric === 'type') color = t.kind === 'major' ? Cs.accent : Cs.cool;
+    else color = C.mapMetricColor(mapMetric, code) || '#475569';
     m.setStyle({
       radius: base + (isSel ? 4 : isHov ? 2.5 : 0),
       weight: isSel ? 3 : 1.2,
-      fillOpacity: isSel ? 1 : t.kind === 'major' ? .72 : .5
+      color: isSel ? Cs.accent : color,
+      fillColor: color,
+      fillOpacity: isSel ? 1 : mapMetric === 'type' && t.kind !== 'major' ? .5 : .78
     });
-    if (t.kind !== 'major') m.setStyle({ color: C.cool, fillColor: C.cool });
-    else m.setStyle({ color: C.accent, fillColor: C.accent });
     if (isSel) m.bringToFront();
+  });
+}
+
+/* tooltips only need repainting when the metric or theme changes —
+   not on every hover emit */
+function refreshTooltips() {
+  markersByCode.forEach((m, code) =>
+    m.setTooltipContent ? m.setTooltipContent(markerTooltipHtml(code)) : null);
+}
+
+if (mapByEl) {
+  Object.keys(C.MAP_METRICS).forEach(k => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = C.MAP_METRICS[k].label;
+    mapByEl.appendChild(o);
+  });
+  mapByEl.addEventListener('change', () => {
+    mapMetric = mapByEl.value;
+    renderLegend();
+    applyMarkerStates();
+    refreshTooltips();
   });
 }
 
 /* ---------- report panel ---------- */
 const trBody = document.getElementById('tr-body');
-function unpackTrustHistory(code) {
-  const packed = window.AE_TRUST_HIST && window.AE_TRUST_HIST[code];
-  if (!packed) return null;
-  const months = window.AE_TRUST_MONTHS;
-  // form A: [startIdx, rows...] contiguous months
-  if (typeof packed[0] === 'number') {
-    return packed.slice(1).map((r, i) => mkRow(months[packed[0] + i], r));
-  }
-  // form B: [{i, g:[gaps]}, rows...] with month gaps between rows
-  let idx = packed[0].i;
-  return packed.slice(1).map((r, k) => {
-    if (k) idx += packed[0].g[k - 1];
-    return mkRow(months[idx], r);
-  });
-  function mkRow(ym, r) {
-    return { ym, att: r[0] * 10, cov: r[1] === 1, w4: r[2] * 10,
-      t1: r[3], b1: r[4], adm: r[5], dta: r[6] };
-  }
-}
-function fmtFull(n) { return n == null ? '—' : n.toLocaleString('en-GB'); }
-
 function animatePanel() {
   trBody.classList.remove('tr-in');
   void trBody.offsetHeight;          // restart the entrance animation
   trBody.classList.add('tr-in');
 }
 
-function animatePanel() {
-  trBody.classList.remove('tr-in');
-  void trBody.offsetHeight;          // restart the entrance animation
-  trBody.classList.add('tr-in');
-}
-
-/* ---------- compare mode (pin up to two trusts) ---------- */
+/* ---------- compare mode (pin 2–4 trusts, same reporting basis) ---------- */
 let cmpCodes = [];
 function toggleCompare(code) {
   const i = cmpCodes.indexOf(code);
   if (i >= 0) cmpCodes.splice(i, 1);
-  else { if (cmpCodes.length >= 2) cmpCodes.shift(); cmpCodes.push(code); }
+  else { if (cmpCodes.length >= 4) cmpCodes.shift(); cmpCodes.push(code); }
   renderReport(selected);
 }
-function cmpSparkPath(code) {
-  const hist = unpackTrustHistory(code);
-  if (!hist) return '';
-  const pts = hist.filter(h => h.cov).map(h => 100 * h.w4 / h.att).filter(isFinite);
-  if (pts.length < 2) return '';
-  const W = 280, H = 74, pad = 4;
-  const y = v => pad + (1 - (Math.min(Math.max(v, 40), 100) - 40) / 60) * (H - 2 * pad);
-  const line = pts.map((v, i) => (i ? 'L' : 'M') + (pad + i / (pts.length - 1) * (W - 2 * pad)).toFixed(1) + ',' + y(v).toFixed(1)).join('');
-  return `<path d="${line}" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-}
+const CMP_HUES = ['var(--accent)', 'var(--cool)', 'var(--warm)', '#a78bfa'];
+
 function buildCompareBlock() {
   if (!cmpCodes.length) return '';
   if (cmpCodes.length < 2) {
-    const t0 = byCode.get(cmpCodes[0]);
-    return `<div class="tr-block"><h4>Compare</h4><div class="tr-note">Pinned <b>${t0 ? t0.name : cmpCodes[0]}</b>.
-      Open another trust and press <b>+ compare</b> to see them side by side.
+    const t0 = C.BY_CODE.get(cmpCodes[0]);
+    return `<div class="tr-block"><h4>Compare trusts</h4><div class="tr-note">Pinned <b>${t0 ? t0.name : cmpCodes[0]}</b>.
+      Open another trust and press <b>+ compare</b> to see 2–4 trusts side by side.
       <button class="linklike" id="tr-cmp-clear">clear</button></div></div>`;
   }
-  const [ca, cb] = cmpCodes, ta = byCode.get(ca), tb = byCode.get(cb);
-  if (!ta || !tb) { cmpCodes = []; return ''; }
-  const perf = x => x != null ? x.toFixed(1) + '%' : '—';
-  const pa = ta.attCov ? 100 * ta.w4 / ta.attCov : null;
-  const pb = tb.attCov ? 100 * tb.w4 / tb.attCov : null;
-  const brT = t => t.br != null ? t.br : (t.attCov != null ? Math.max(t.attCov - t.w4, 0) : null);
-  const rows = [
-    ['attended · last 12 mo', fmtFull(ta.att), fmtFull(tb.att)],
-    ['left within 4 hours', perf(pa), perf(pb)],
-    ['waited longer than 4h', brT(ta) != null ? fmtFull(brT(ta)) : '—', brT(tb) != null ? fmtFull(brT(tb)) : '—'],
-    ['waited on a trolley 12h+', ta.dta != null ? fmtFull(ta.dta) : '—', tb.dta != null ? fmtFull(tb.dta) : '—'],
-    ['emergency admissions', ta.adm != null ? fmtFull(ta.adm) : '—', tb.adm != null ? fmtFull(tb.adm) : '—'],
-    ['met the 95% promise', `${ta.met} of ${ta.months}`, `${tb.met} of ${tb.months}`]
+  const rowsData = C.compareRows(cmpCodes, selPeriod);
+  const basis = selPeriod
+    ? `one month — ${C.monthLabel(selPeriod)}`
+    : `the same window — the last 12 reported months`;
+  // metric definitions: [key, label, unit, higherIsBetter]
+  const defs = [
+    ['perf', 'Left within 4 hours', '%', true],
+    ['att', 'People arrived', '', true],
+    ['br', 'Waited longer than 4h', '', false],
+    ['adm', 'Emergency admissions', '', true],
+    ['dta', 'Waited on a trolley 12h+', '', false]
   ];
-  const sa = cmpSparkPath(ca).replace('<path ', '<path stroke="var(--accent)" ');
-  const sb = cmpSparkPath(cb).replace('<path ', '<path stroke="var(--cool)" ');
-  return `<div class="tr-block"><h4>Side by side
+  const fmtVal = (k, v) => v == null ? '<span class="nodata">no data</span>'
+    : k === 'perf' ? v.toFixed(1) + '%' : C.fmt(v);
+  const barRow = (k, label, unit) => {
+    const vals = rowsData.map(r => r[k]);
+    const maxV = Math.max(...vals.filter(v => v != null), 0);
+    const any = vals.some(v => v != null);
+    return `<div class="tr-cmp-metric">
+      <div class="tr-cmp-mlabel">${label}${k === 'br' || k === 'dta' ? ' <span class="dir-hint">↓ lower is better</span>' :
+        k === 'perf' || k === 'adm' ? ' <span class="dir-hint">↑ higher is better</span>' :
+        ' <span class="dir-hint">context</span>'}</div>
+      ${any ? rowsData.map((r, i) => r[k] == null
+        ? `<div class="tr-cmp-brow"><span class="tr-cmp-bname">${r.shortName}</span><span class="tr-cmp-btrack"><span class="nodata-inline">no data published</span></span></div>`
+        : `<div class="tr-cmp-brow"><span class="tr-cmp-bname">${r.shortName}</span>
+             <span class="tr-cmp-btrack"><span class="tr-cmp-bar" style="width:${Math.max(2, 100 * r[k] / maxV)}%;background:${CMP_HUES[i]}"></span></span>
+             <span class="tr-cmp-bval num">${fmtVal(k, r[k])}${k === 'dta' && r.dtaShare != null ? ` <em>(${r.dtaShare.toFixed(1)}% of adm.)</em>` : ''}</span></div>`
+      ).join('')
+      : `<div class="tr-cmp-brow"><span class="nodata-inline">no trust published this measure for ${basis}</span></div>`}
+    </div>`;
+  };
+  return `<div class="tr-block"><h4>Compare trusts
       <button class="linklike" id="tr-cmp-clear">clear</button></h4>
-    <div class="tr-cmp-names"><span class="a">${ta.name}</span><span class="b">${tb.name}</span></div>
-    <div class="tr-cmp">${rows.map(r =>
-      `<div class="tr-cmp-row"><span class="n">${r[0]}</span><span class="a num">${r[1]}</span><span class="b num">${r[2]}</span></div>`).join('')}
-    </div>
-    ${sa || sb ? `<svg class="tr-spark" viewBox="0 0 280 74" role="img" aria-label="Monthly four-hour performance of both trusts overlaid">
-      <line x1="4" x2="276" y1="${(4 + (1 - (95 - 40) / 60) * 66).toFixed(1)}" y2="${(4 + (1 - (95 - 40) / 60) * 66).toFixed(1)}"
-        stroke="#fbbf24" stroke-dasharray="4 4" opacity=".8"/>${sa}${sb}</svg>
-      <div class="tr-note"><span style="color:var(--accent)">▬ first trust</span> ·
-      <span style="color:var(--cool)">▬ second trust</span> · dashed gold is the 95% promise.</div>` : ''}`;
+    <div class="tr-note">All figures cover <b>${basis}</b>${selPeriod ? '' : ', matching each trust\u2019s own reporting'}.
+      Bars are scaled within each metric; percentages and counts are kept apart.</div>
+    <div class="tr-cmp-names">${rowsData.map((r, i) =>
+      `<span style="color:${CMP_HUES[i]}">▬ ${r.name}</span>`).join('')}</div>
+    ${defs.map(d => barRow(...d)).join('')}
+    <div class="tr-note">Missing bars mean the NHS did not publish that figure for a trust in this period — they are never shown as zero.</div></div>`;
 }
 
-function renderReport(code) {
-  const t = byCode.get(code), g = geoByCode.get(code);
-  if (!t || !g) return;
-  const hist = unpackTrustHistory(code);
-
-  // headline metrics: latest reported month (with breach data preferred)
-  let row = null;
-  if (hist) {
-    for (let i = hist.length - 1; i >= 0; i--) { if (hist[i].cov) { row = hist[i]; break; } }
-    if (!row) row = hist[hist.length - 1];
+/* ---------- patient-journey flow (overlaps stated explicitly) ---------- */
+function buildJourney(t, rec) {
+  if (!rec || !rec.cov || !rec.att) {
+    return `<div class="tr-block"><h4>The patient journey</h4>
+      <div class="tr-unavailable">Waiting-time detail isn't published for this period, so the journey can't be drawn.</div></div>`;
   }
-  const l12perf = t.attCov ? Math.round(100 * t.w4 / t.attCov * 10) / 10 : null;
+  const w4pct = Math.round(rec.w4 / rec.att * 1000) / 10;
+  const br = rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0);
+  const steps = [
+    { v: C.fmt(rec.att), k: 'people arrived', cls: '', note: 'everyone who came through A&E doors' },
+    { v: w4pct.toFixed(1) + '%', k: 'left within 4 hours', cls: 'good', note: `${C.fmt(rec.w4)} people` },
+    { v: C.fmt(br), k: 'waited longer than 4h', cls: 'hot', note: `${w4pct >= 0 ? (100 - w4pct).toFixed(1) : '—'}% of arrivals` },
+    { v: rec.adm != null ? C.fmt(rec.adm) : '—', k: 'admitted to a ward', cls: '', note: 'different measure: admissions, not a subset of the wait split' },
+    { v: rec.dta != null ? C.fmt(rec.dta) : '—', k: 'waited on a trolley 12h+', cls: 'hot', note: 'after the decision to admit — drawn from the admissions pathway' }
+  ];
+  return `<div class="tr-block"><h4>The patient journey · ${C.monthLabel(rec.ym)}</h4>
+    <div class="journey">${steps.map((s, i) =>
+      `${i ? '<div class="j-arrow" aria-hidden="true">↓</div>' : ''}
+       <div class="j-step ${s.cls}"><span class="j-v num">${s.v}</span><span class="j-k">${s.k}</span>
+       <span class="j-n">${s.note}</span></div>`).join('')}</div>
+    <div class="tr-note"><b>Read carefully:</b> these measures come from different parts of the monthly return.
+      The 4-hour split covers every arrival; admissions and trolley waits follow the admission pathway, so they
+      overlap rather than stack. This chart shows scale, not mutually exclusive buckets.</div></div>`;
+}
 
-  // rolling-twelve-month roll-ups straight from the provider table
+/* ---------- explainable metric tiles ---------- */
+let expSeq = 0;
+function tile(t) {
+  if (!t.explain) return `<div class="tr-stat ${t.cls || ''}">
+    <span class="k">${t.k}</span><span class="v num">${t.v}</span>
+    ${t.x ? `<span class="x">${t.x}</span>` : ''}</div>`;
+  const id = 'exp' + (++expSeq);
+  return `<div class="tr-stat ${t.cls || ''}">
+    <span class="k">${t.k}</span><span class="v num">${t.v}</span>
+    ${t.x ? `<span class="x">${t.x}</span>` : ''}
+    <button class="linklike exp-btn" type="button" aria-expanded="false"
+      aria-controls="${id}">What does this mean?</button>
+    <div class="explainer" id="${id}" hidden>${t.explain}</div></div>`;
+}
+function wireExplainers(root) {
+  root.querySelectorAll('.exp-btn').forEach(btn => {
+    const box = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!box) return;
+    btn.addEventListener('click', () => {
+      box.hidden = !box.hidden;
+      btn.setAttribute('aria-expanded', String(!box.hidden));
+    });
+  });
+}
+
+/* ---------- main report renderer ---------- */
+function renderReport(code) {
+  const t = C.BY_CODE.get(code), g = C.GEO_BY_CODE.get(code);
+  if (!t || !g) return;
+  const hist = C.history(code);
+  const eng = C.england12m();
+
+  /* --- the one authoritative record for the selected period --- */
+  const rec = C.currentRecord(code, selPeriod);        // exact month or latest covered
+  const monthMode = !!selPeriod;
+
+  const l12perf = t.attCov ? Math.round(100 * t.w4 / t.attCov * 10) / 10 : null;
   const brTotal = t.br != null ? t.br : (t.attCov != null ? Math.max(t.attCov - t.w4, 0) : null);
   const brShare = brTotal != null && t.attCov ? Math.round(1000 * brTotal / t.attCov) / 10 : null;
   const admShare = t.adm != null && t.att ? Math.round(1000 * t.adm / t.att) / 10 : null;
   const perDay = t.att ? Math.round(t.att / 365) : null;
 
-  // records across this trust's whole published archive
+  /* records across this trust's whole published archive */
   let bestM = null, worstM = null, busyM = null;
-  if (hist) {
-    for (const h of hist) {
-      if (!busyM || h.att > busyM.att) busyM = h;
-      if (!h.cov || !h.att) continue;
-      const v = 100 * h.w4 / h.att;
-      if (!isFinite(v)) continue;
-      if (!bestM || v > bestM.v) bestM = { ym: h.ym, v };
-      if (!worstM || v < worstM.v) worstM = { ym: h.ym, v };
-    }
-  }
-  function mLabel(ym) {
-    const [y, m] = ym.split('-').map(Number);
-    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1] + ' ' + y;
+  if (hist) for (const h of hist) {
+    if (!busyM || h.att > busyM.att) busyM = h;
+    if (!h.cov || !h.att) continue;
+    const v = 100 * h.w4 / h.att;
+    if (!isFinite(v)) continue;
+    if (!bestM || v > bestM.v) bestM = { ym: h.ym, v };
+    if (!worstM || v < worstM.v) worstM = { ym: h.ym, v };
   }
 
-  // national rank: where this trust sits on % within 4h across all ranked trusts
+  /* national rank on % within 4h across ranked trusts */
   let rankInfo = null;
   if (l12perf != null) {
-    const ranked = P.filter(p => p[6] > 0)
-      .map(p => ({ code: p[0], pct: 100 * p[7] / p[6] }))
+    const ranked = P.filter(p => p.attCov > 0)
+      .map(p => ({ code: p.code, pct: 100 * p.w4 / p.attCov }))
       .sort((a, b) => b.pct - a.pct);
     const pos = ranked.findIndex(r => r.code === code);
     if (pos >= 0) {
@@ -342,13 +422,12 @@ function renderReport(code) {
     }
   }
 
-  // year-on-year change (percentage points) from the monthly history
+  /* year-on-year change (percentage points) from monthly history */
   let trendD = null;
   if (hist && l12perf != null) {
     const covRows = hist.filter(h => h.cov);
-    const tail = covRows.slice(-12), prev = covRows.slice(-24, -12);
-    const avg = rows => rows.length ? rows.reduce((s, h) => s + h.w4, 0) / rows.reduce((s, h) => s + h.att, 0) * 100 : null;
-    const now = avg(tail), before = avg(prev);
+    const avg = rs => rs.length ? rs.reduce((s, h) => s + h.w4, 0) / rs.reduce((s, h) => s + h.att, 0) * 100 : null;
+    const now = avg(covRows.slice(-12)), before = avg(covRows.slice(-24, -12));
     if (now != null && before != null && isFinite(before)) trendD = now - before;
   }
 
@@ -356,87 +435,136 @@ function renderReport(code) {
                  : t.kind === 'walkin' ? 'walk-in / community sites'
                  : 'single-speciality site';
 
-  // ── compact scorecard: everything above the fold, nothing to scroll ──
-  const tiles = [
-    { k: 'attended · last 12 months', v: t.att != null ? fmtFull(t.att) : 'Data unavailable',
-      x: perDay ? `${fmtShort(perDay)} arrivals a day` : '', cls: '' },
-    { k: 'left within 4 hours', v: l12perf != null ? l12perf.toFixed(1) + '%' : 'Data unavailable',
-      x: l12perf == null ? '' : l12perf >= 95 ? 'promise kept on average'
-        : l12perf < 75.1 ? 'below England average' : 'above England average',
-      cls: l12perf == null ? '' : (l12perf >= 95 ? 'good' : l12perf < 60 ? 'hot' : '') },
-    { k: 'waited longer than 4h', v: brTotal != null ? fmtFull(brTotal) : 'Data unavailable',
-      x: brShare != null ? `${brShare}% of visits breached` : '',
-      cls: brShare != null && brShare >= 30 ? 'hot' : '' },
-    { k: 'waited on a trolley 12h+', v: t.dta != null ? fmtFull(t.dta) : 'Data unavailable',
-      x: t.dta ? 'no ward bed after decision to admit' : '', cls: '' },
-    { k: 'emergency admissions', v: t.adm != null ? fmtFull(t.adm) : 'Data unavailable',
-      x: admShare != null ? `${admShare}% of arrivals admitted` : '', cls: '' },
-    { k: 'met the 95% promise', v: `${t.met} of ${t.months} months`,
-      x: t.met === 0 ? 'not once in the window' : '', cls: t.met ? 'good' : '' },
-    { k: 'busiest month on record', v: busyM ? fmtFull(busyM.att) : '—',
-      x: busyM ? mLabel(busyM.ym) : '', cls: '' }
-  ];
-  if (rankInfo) tiles.push({ k: 'performance rank · England',
-    v: `#${rankInfo.pos} of ${rankInfo.total}`, x: `${rankInfo.quart} on four-hour waits`, cls: '' });
-  if (trendD != null) tiles.push({ k: 'vs previous 12 months',
-    v: `${trendD >= 0 ? '+' : ''}${trendD.toFixed(1)}pp`,
-    x: trendD >= 0 ? 'improving' : 'declining', cls: trendD >= 0 ? 'good' : 'hot' });
+  /* --- headline tiles: either one month, or the 12-month roll-up --- */
+  let tiles, headLabel;
+  if (monthMode && (!rec || !rec.cov || !rec.att)) {
+    headLabel = `REPORTING MONTH · ${C.monthLabel(selPeriod).toUpperCase()} · NO DATA PUBLISHED`;
+    tiles = [
+      { k: `attended · ${C.monthLabel(selPeriod)}`, v: rec && rec.att ? C.fmt(rec.att) : 'Data unavailable', x: '', cls: '' },
+      { k: 'left within 4 hours', v: 'Data unavailable', x: 'waits not published for this month', cls: '' },
+      { k: 'waited longer than 4h', v: 'Data unavailable', x: '', cls: '' },
+      { k: 'waited on a trolley 12h+', v: rec && rec.dta != null ? C.fmt(rec.dta) : 'Data unavailable', x: '', cls: '' },
+      { k: 'emergency admissions', v: rec && rec.adm != null ? C.fmt(rec.adm) : 'Data unavailable', x: '', cls: '' }
+    ];
+  } else if (monthMode) {
+    const pct = Math.round(1000 * rec.w4 / rec.att) / 10;
+    headLabel = `ONE REPORTING MONTH · ${C.monthLabel(selPeriod).toUpperCase()} · NOT THE 12-MONTH AVERAGE`;
+    tiles = [
+      { k: 'people arrived', v: C.fmt(rec.att),
+        x: perDay ? `${C.fmtShort(Math.round(rec.att / 30))} arrivals a day` : '', cls: '',
+        explain: C.explainer('att', rec.att, { att: rec.att }) },
+      { k: 'left within 4 hours', v: pct.toFixed(1) + '%',
+        x: pct >= 95 ? 'promise kept this month' : pct < 60 ? 'a very difficult month' : '',
+        cls: pct >= 95 ? 'good' : pct < 60 ? 'hot' : '',
+        explain: C.explainer('w4', rec.w4, { perf: pct }) },
+      { k: 'waited longer than 4h', v: C.fmt(rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0)),
+        x: `${(100 - pct).toFixed(1)}% of visits breached`, cls: (100 - pct) >= 30 ? 'hot' : '',
+        explain: C.explainer('br', rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0), {}) },
+      { k: 'waited on a trolley 12h+', v: rec.dta != null ? C.fmt(rec.dta) : 'Data unavailable',
+        x: rec.dta != null ? 'no ward bed after decision to admit' : 'not published this month', cls: '',
+        explain: rec.dta != null ? C.explainer('dta', rec.dta, {}) : null },
+      { k: 'emergency admissions', v: rec.adm != null ? C.fmt(rec.adm) : 'Data unavailable',
+        x: rec.adm != null && rec.att ? `${Math.round(1000 * rec.adm / rec.att) / 10}% of arrivals admitted` : '', cls: '',
+        explain: rec.adm != null ? C.explainer('adm', rec.adm, { att: rec.att }) : null }
+    ];
+  } else {
+    headLabel = `ROLLING WINDOW · LAST ${t.months} REPORTED MONTHS · TO ${C.monthLabel(C.LAST_YM).toUpperCase()}`;
+    tiles = [
+      { k: 'attended · last 12 months', v: t.att != null ? C.fmt(t.att) : 'Data unavailable',
+        x: perDay ? `${C.fmtShort(perDay)} arrivals a day` : '', cls: '',
+        explain: C.explainer('att', t.att, { att: t.att }) },
+      { k: 'left within 4 hours', v: l12perf != null ? l12perf.toFixed(1) + '%' : 'Data unavailable',
+        x: l12perf == null ? '' : l12perf >= 95 ? 'promise kept on average'
+          : l12perf < eng.perf ? 'below England average' : 'above England average',
+        cls: l12perf == null ? '' : (l12perf >= 95 ? 'good' : l12perf < 60 ? 'hot' : ''),
+        explain: C.explainer('w4', t.w4, { perf: l12perf }) },
+      { k: 'waited longer than 4h', v: brTotal != null ? C.fmt(brTotal) : 'Data unavailable',
+        x: brShare != null ? `${brShare}% of visits breached` : '',
+        cls: brShare != null && brShare >= 30 ? 'hot' : '',
+        explain: C.explainer('br', brTotal, {}) },
+      { k: 'waited on a trolley 12h+', v: t.dta != null ? C.fmt(t.dta) : 'Data unavailable',
+        x: t.dta ? 'no ward bed after decision to admit' : '', cls: '',
+        explain: C.explainer('dta', t.dta, {}) },
+      { k: 'emergency admissions', v: t.adm != null ? C.fmt(t.adm) : 'Data unavailable',
+        x: admShare != null ? `${admShare}% of arrivals admitted` : '', cls: '',
+        explain: C.explainer('adm', t.adm, { att: t.att }) },
+      { k: 'met the 95% promise', v: `${t.met} of ${t.months} months`,
+        x: t.met === 0 ? 'not once in the window' : '', cls: t.met ? 'good' : '' },
+      { k: 'busiest month on record', v: busyM ? C.fmt(busyM.att) : '—',
+        x: busyM ? C.monthLabel(busyM.ym) : '', cls: '' }
+    ];
+    if (rankInfo) tiles.push({ k: 'performance rank · England',
+      v: `#${rankInfo.pos} of ${rankInfo.total}`, x: `${rankInfo.quart} on four-hour waits`, cls: '' });
+    if (trendD != null) tiles.push({ k: 'vs previous 12 months',
+      v: `${trendD >= 0 ? '+' : ''}${trendD.toFixed(1)}pp`,
+      x: trendD >= 0 ? 'improving' : 'declining', cls: trendD >= 0 ? 'good' : 'hot' });
+  }
 
-  const tileRow = mm => `<div class="tr-stat ${mm.cls}">
-    <span class="k">${mm.k}</span><span class="v num">${mm.v}</span>${mm.x ? `<span class="x">${mm.x}</span>` : ''}</div>`;
+  /* --- period selector: only months that actually exist in the dataset --- */
+  const periodsBar = (() => {
+    if (!hist || !hist.length) return '';
+    const cur = selPeriod || C.LAST_YM;
+    const idx = C.PERIODS.indexOf(cur);
+    const hasPrev = idx > 0;
+    const hasNext = selPeriod != null;                 // "next" returns to latest
+    return `<div class="tr-period" role="group" aria-label="Change reporting period">
+      <button type="button" class="per-btn" id="per-prev" ${hasPrev ? '' : 'disabled'}
+        aria-label="Previous reporting period">←</button>
+      <span class="per-label num">${monthMode ? C.monthLabel(selPeriod) : 'Latest · ' + C.monthLabel(C.LAST_YM)}</span>
+      <button type="button" class="per-btn" id="per-next" ${hasNext ? '' : 'disabled'}
+        aria-label="Next reporting period">→</button>
+    </div>`;
+  })();
 
-  // the most recent month as a single line
-  const lmPerf = row && row.cov && row.att ? Math.round(1000 * row.w4 / row.att) / 10 : null;
-  const lmLine = row ? `<div class="tr-block"><h4>Latest month · ${mLabel(row.ym)}</h4>
-    <div class="tr-note"><b class="num">${fmtFull(row.att)}</b> people arrived ·
-    <b class="num">${lmPerf != null ? lmPerf.toFixed(1) + '%' : '—'}</b> left within 4 hours${row.dta != null ? ` · <b class="num">${fmtFull(Math.round(row.dta * 1000))}</b> waited on a trolley 12h+` : ''}.</div></div>` : '';
-
-  // trend chart (monthly % within 4h) — every month is inspectable:
-  // hover or tap a point for that month's full credentials
+  /* trend chart (monthly % within 4h) */
   let sparkSvg = '', sparkNote = '', sparkMeta = null;
   if (hist) {
     const pts = hist.filter(h => h.cov).map(h => ({
-      ym: h.ym, v: 100 * h.w4 / h.att, att: h.att, br: h.att - h.w4,
+      ym: h.ym, v: 100 * h.w4 / h.att, att: h.att, br: h.br != null ? h.br : h.att - h.w4,
       adm: h.adm != null ? Math.round(h.adm * 1000) : null,
       dta: h.dta != null ? Math.round(h.dta * 1000) : null
     })).filter(p => isFinite(p.v));
     if (pts.length > 3) {
       const W2 = 280, H2 = 96, padL = 6, padT = 6;
-      const ih = H2 - padT - 16;                       // room for year labels
+      const ih = H2 - padT - 16;
       const xs = i => padL + i / (pts.length - 1) * (W2 - 2 * padL);
       const ys = p => padT + (1 - (Math.min(Math.max(p.v, 40), 100) - 40) / 60) * ih;
       const path = pts.map((p, i) => (i ? 'L' : 'M') + xs(i).toFixed(1) + ',' + ys(p).toFixed(1)).join('');
       const yLine = (padT + (1 - .9167) * ih).toFixed(1);
-      // January ticks give the eye a timeline
       const years = pts.map((p, i) => ({ p, i }))
         .filter(({ p }) => p.ym.endsWith('-01'))
         .map(({ p, i }) => `<text x="${xs(i).toFixed(1)}" y="${H2 - 4}" font-size="8"
           fill="#5c6a82" text-anchor="middle">${p.ym.slice(2, 4)}</text>`).join('');
       sparkMeta = { pts };
+      // mark the selected period on the timeline
+      const selPt = selPeriod ? pts.find(p => p.ym === selPeriod) : pts[pts.length - 1];
+      const selMark = selPt ? `<circle cx="${xs(pts.indexOf(selPt)).toFixed(1)}" cy="${ys(selPt).toFixed(1)}"
+        r="4.6" fill="none" stroke="var(--warm)" stroke-width="2"/>` : '';
       sparkSvg = `<div class="tr-sparkwrap"><svg class="tr-spark" viewBox="0 0 ${W2} ${H2}" role="img"
         aria-label="Monthly share seen within four hours, ${pts[0].ym} to ${pts[pts.length-1].ym}: started near ${pts[0].v.toFixed(0)} percent, now about ${pts[pts.length-1].v.toFixed(0)} percent. Touch or hover any point for that month's details.">
         <line x1="${padL}" x2="${W2-padL}" y1="${yLine}" y2="${yLine}" stroke="#fbbf24" stroke-dasharray="4 4" opacity=".8"/>
         <path d="${path}" fill="none" stroke="#5eead4" stroke-width="2"/>
         <circle cx="${xs(pts.length-1).toFixed(1)}" cy="${ys(pts[pts.length-1]).toFixed(1)}" r="3.4" fill="#5eead4"/>
+        ${selMark}
         <circle class="pt-hl" r="4" fill="#ffffff" stroke="#5eead4" stroke-width="2" opacity="0"/>
         ${years}
-        ${pts.map((p, i) => `<circle class="tr-pt" data-i="${i}" cx="${xs(i).toFixed(1)}" cy="${ys(p).toFixed(1)}" r="7" fill="transparent"/>`).join('')}
+        ${pts.map((p, i) => `<circle class="tr-pt" data-i="${i}" data-ym="${p.ym}" cx="${xs(i).toFixed(1)}" cy="${ys(p).toFixed(1)}" r="7" fill="transparent"/>`).join('')}
       </svg><div class="tr-tip" hidden></div></div>`;
-      sparkNote = `<div class="tr-note">Touch or hover any point to see that month's numbers.
-        The dashed line is the 95% promise. <span class="say">Best month
+      sparkNote = `<div class="tr-note">Touch or hover any point for that month's numbers — tap a point again to pin
+        that reporting period above. The dashed line is the 95% promise. <span class="say">Best month
         ${Math.max(...pts.map(p=>p.v)).toFixed(0)}% · worst ${Math.min(...pts.map(p=>p.v)).toFixed(0)}%</span>.</div>`;
     }
   }
 
-  // type split (real Type 1 / Type 3 volumes from the provider table)
+  /* front-door type split */
   let splitHtml = '';
   if (t.kind === 'major') {
     const tot = (t.t1 || 0) + (t.t3 || 0);
     const s1 = tot ? Math.round(100 * t.t1 / tot) : null;
     splitHtml = `<div class="tr-block"><h4>The front doors</h4>
       <div class="tr-note"><b>Major A&amp;E trust.</b> Last year its consultant-led (Type 1) departments handled
-      <b class="num">${t.t1 ? fmtFull(t.t1) : '—'}</b> visits${s1 != null ? ` — <b class="num">${s1}%</b> of its front-door traffic` : ''}, against
-      <b class="num">${t.t3 ? fmtFull(t.t3) : '—'}</b> at walk-in / urgent-care doors.</div>
+      <b class="num">${t.t1 ? C.fmt(t.t1) : '—'}</b> visits${s1 != null ? ` — <b class="num">${s1}%</b> of its front-door traffic` : ''}, against
+      <b class="num">${t.t3 ? C.fmt(t.t3) : '—'}</b> at walk-in / urgent-care doors.</div>
       ${tot ? `<div class="tr-split"><span style="flex:${t.t1};background:rgba(94,234,212,.75)"></span><span style="flex:${t.t3};background:rgba(125,211,252,.55)"></span></div>
       <div class="tr-split-legend"><span>Type 1 consultant-led A&amp;E${s1 != null ? ' · ' + s1 + '%' : ''}</span>
       <span>walk-in / urgent care${s1 != null ? ' · ' + (100 - s1) + '%' : ''}</span></div>` : ''}</div>`;
@@ -447,30 +575,90 @@ function renderReport(code) {
         : '<b>Single-speciality service.</b> e.g. eye casualty — low volume, specialist care.'}</div></div>`;
   }
 
-  const cmpBtn = `<button class="linklike" id="tr-compare"
-    title="${cmpCodes.includes(code) ? 'Remove from comparison' : 'Pin for side-by-side comparison'}">${cmpCodes.includes(code) ? '✓ comparing' : '+ compare'}</button>`;
+  /* regional context — computed from real trust rows only */
+  let regionHtml = '';
+  const reg = t.region ? C.regionStats(t.region) : null;
+  regionHtml = `<div class="tr-block"><h4>Where this trust sits</h4><div class="tr-note">
+    ${t.region ? `Region: <b>${t.region}</b>. ` : '<span class="nodata-inline">region not derivable for this site.</span> '}
+    ${reg && reg.perf != null
+      ? `Across its <b>${reg.n}</b> reporting trusts, ${t.region} averaged <b class="num">${reg.perf.toFixed(1)}%</b> within 4 hours
+         over the same window. `
+      : ''}${eng.perf != null ? `England as a whole: <b class="num">${eng.perf.toFixed(1)}%</b>. ` : ''}
+    ${l12perf != null && reg && reg.perf != null
+      ? l12perf >= reg.perf
+        ? `So this trust performs <b>better than</b> its regional average.`
+        : `So this trust performs <b>below</b> its regional average.` : ''}
+    ${reg ? `<div class="mini-bars">
+      ${[['This trust', l12perf], [t.region || 'Region', reg ? reg.perf : null], ['England', eng.perf]].map(([k, v], i) =>
+        `<div class="mb-row"><span class="mb-k">${k}</span>
+         <span class="mb-track">${v != null ? `<span class="mb-bar hue${i}" style="width:${Math.max(2, (v - 40) / 60 * 100)}%"></span>` : '<span class="nodata-inline">no data</span>'}</span>
+         <span class="mb-v num">${v != null ? v.toFixed(1) + '%' : '—'}</span></div>`).join('')}
+    </div>` : ''}
+    <span class="x-note">Bars share one 40–100% scale. Regional averages aggregate real monthly reports from trusts placed
+    in the region by their registered postcode — nothing is estimated.</span></div></div>`;
 
+  /* deterministic insights */
+  const insList = C.insights(code);
+  const insHtml = insList.length ? `<div class="tr-block"><h4>What stands out?</h4><ul class="insights">${
+    insList.map(i => `<li class="ins-${i.tone}"><span class="ins-icon" aria-hidden="true">${i.icon}</span>${i.text}</li>`).join('')
+  }</ul><div class="tr-note">Every statement above is computed from the cleaned monthly reports and names its own
+    comparison basis. No causes are claimed — patterns only.</div></div>` : '';
+
+  /* transparency footer */
+  const pubMonths = hist ? hist.filter(h => h.cov).length : 0;
+  const totMonths = hist ? hist.length : 0;
+  const aboutHtml = `<details class="about-data"><summary>About this data</summary><ul>
+    <li><b>Source:</b> NHS England monthly “A&amp;E Attendances and Emergency Admissions” statistics, cleaned and
+      reconciled in the warehouse table <code>fct_ae_activity</code> (one row per site per month).</li>
+    <li><b>Reporting period shown:</b> ${monthMode ? C.monthLabel(selPeriod) + ' (single month)' :
+      `last ${t.months} reported months, ending ${C.monthLabel(C.LAST_YM)}`}.</li>
+    <li><b>Coverage:</b> waiting-time detail published for <b>${pubMonths}</b> of ${totMonths} months since April 2017
+      in this trust's archive. Months marked “Data unavailable” have no published figures — nothing is estimated.</li>
+    <li><b>Region:</b> derived from the trust's registered headquarters postcode (${g.src === 'ods' ? C.GEO_BY_CODE.get(code).detail : 'placement record'});
+      regional averages sum real reports from trusts in the same region.</li>
+    <li><b>Limitations:</b> the 4-hour clock runs from arrival to departure, including waits after a decision to admit;
+      these figures measure waits, not outcomes; organisations sometimes merge or rename (history stays attached by code).</li>
+  </ul></details>`;
+
+  /* actions: export + share */
+  const actionsHtml = `<div class="tr-actions">
+    <button class="linklike" id="tr-csv" type="button">⬇ CSV</button>
+    <button class="linklike" id="tr-copy" type="button">🔗 copy link</button>
+    <button class="linklike" id="tr-print" type="button">🖨 print / PDF</button>
+  </div>`;
+
+  /* assemble */
   trBody.hidden = false;
   trBody.innerHTML = `
-    <div class="tr-kicker">Trust report<span style="color:var(--dim)">·</span><span class="num">${code}</span>${cmpBtn}</div>
+    <div class="tr-kicker">Trust report<span style="color:var(--dim)">·</span><span class="num">${code}</span>
+      <button class="linklike" id="tr-compare" type="button"
+        title="${cmpCodes.includes(code) ? 'Remove from comparison' : 'Pin for side-by-side comparison (2–4 trusts)'}">${cmpCodes.includes(code) ? '✓ comparing' : '+ compare'}</button></div>
     <div class="tr-name">${t.name}</div>
-    <div class="tr-window num">${kindName} · ${t.months} reporting months · to ${mLabel(LAST_YM)}</div>
+    <div class="tr-window num">${kindName}${t.region ? ' · ' + t.region : ''} · ${headLabel}</div>
 
-    <div class="tr-statgrid">${tiles.map(tileRow).join('')}</div>
+    ${periodsBar}
+    ${monthMode && (!rec || !rec.cov) ? `<div class="tr-unavailable">The NHS did not publish complete waiting-time
+      figures for this trust in ${selPeriod ? C.monthLabel(selPeriod) : 'this month'}, so the affected metrics read
+      “Data unavailable” rather than an invented number.</div>` : ''}
 
-    ${lmLine}
+    <div class="tr-statgrid">${tiles.map(tile).join('')}</div>
+
+    ${buildJourney(t, rec)}
 
     ${sparkSvg ? `<div class="tr-block"><h4>The eleven-year slide at this trust</h4>${sparkSvg}${sparkNote}</div>` :
        `<div class="tr-unavailable">Monthly waiting-time history isn't available for this site in the cleaned dataset.</div>`}
 
-    <div class="tr-block"><h4>Compared with England</h4>
-      <div class="tr-note">This trust: <b class="num">${l12perf != null ? l12perf.toFixed(1)+'%' : '—'}</b> within 4 hours
-      over the last twelve months. England as a whole:
-      <b class="num">75.1%</b>. ${l12perf != null ? (l12perf >= 75.1 ? 'So this trust performs <b>better than average</b>.' : 'So this trust performs <b>worse than average</b>.') : ''}</div></div>
+    ${regionHtml}
 
     ${splitHtml}
 
     ${buildCompareBlock()}
+
+    ${insHtml}
+
+    ${actionsHtml}
+
+    ${aboutHtml}
 
     <div class="tr-block"><h4>About this location</h4>
       <div class="tr-note">${g.src === 'ods'
@@ -478,12 +666,33 @@ function renderReport(code) {
         : g.src.startsWith('osm') ? 'Placed from OpenStreetMap hospital operator records.'
         : g.src === 'wd' ? 'Placed from its Wikidata headquarters coordinate.'
         : `Position approximate (${g.detail}) — no official coordinate was available.`}</div></div>`;
+
+  /* wire controls created above */
   const btn = document.getElementById('tr-compare');
   if (btn) btn.addEventListener('click', () => toggleCompare(code));
   const clear = document.getElementById('tr-cmp-clear');
   if (clear) clear.addEventListener('click', () => { cmpCodes = []; renderReport(selected); });
 
-  // per-month credentials on the eleven-year chart
+  const prevB = document.getElementById('per-prev');
+  if (prevB) prevB.addEventListener('click', () => stepPeriod(-1));
+  const nextB = document.getElementById('per-next');
+  if (nextB) nextB.addEventListener('click', () => stepPeriod(+1));
+
+  wireExplainers(trBody);
+
+  const csvBtn = document.getElementById('tr-csv');
+  if (csvBtn) csvBtn.addEventListener('click', () => downloadCsv(code));
+  const copyBtn = document.getElementById('tr-copy');
+  if (copyBtn) copyBtn.addEventListener('click', async () => {
+    const url = location.origin + location.pathname + C.buildHash(code, selPeriod);
+    try { await navigator.clipboard.writeText(url); copyBtn.textContent = '✓ copied';
+      setTimeout(() => { copyBtn.textContent = '🔗 copy link'; }, 1600); }
+    catch (e) { window.prompt('Copy this link:', url); }
+  });
+  const printBtn = document.getElementById('tr-print');
+  if (printBtn) printBtn.addEventListener('click', () => window.print());
+
+  // clicking a spark point pins that month as the reporting period
   const wrapEl = trBody.querySelector('.tr-sparkwrap');
   if (wrapEl && sparkMeta) {
     const tip = wrapEl.querySelector('.tr-tip');
@@ -497,12 +706,12 @@ function renderReport(code) {
       if (!tip) return;
       tip.hidden = false;
       tip.innerHTML =
-        `<div class="t-date">${mLabel(p.ym).toUpperCase()}</div>
+        `<div class="t-date">${C.monthLabel(p.ym).toUpperCase()}</div>
          <b class="num" style="font-size:15px">${p.v.toFixed(1)}%</b> seen within 4 hours<br>
-         <span class="num">${fmtFull(p.att)}</span> arrived ·
-         <span class="num">${fmtFull(p.br)}</span> waited longer than 4h` +
-        (p.dta != null ? `<br><span class="num">${fmtFull(p.dta)}</span> trolley waits 12h+` : '') +
-        (p.adm != null ? ` · <span class="num">${fmtFull(p.adm)}</span> admitted` : '');
+         <span class="num">${C.fmt(p.att)}</span> arrived ·
+         <span class="num">${C.fmt(p.br)}</span> waited longer than 4h` +
+        (p.dta != null ? `<br><span class="num">${C.fmt(p.dta)}</span> trolley waits 12h+` : '') +
+        (p.adm != null ? ` · <span class="num">${C.fmt(p.adm)}</span> admitted` : '');
       const wr = wrapEl.getBoundingClientRect();
       tip.style.left = Math.min(Math.max(
         (+c.getAttribute('cx')) / 280 * wr.width - 60, 0), Math.max(wr.width - 130, 0)) + 'px';
@@ -511,16 +720,41 @@ function renderReport(code) {
     wrapEl.querySelectorAll('.tr-pt').forEach(c => {
       c.addEventListener('pointerenter', () => show(c));
       c.addEventListener('pointerleave', hideTip);
+      c.addEventListener('click', () => {                       // pin the period
+        interacted = true;
+        selPeriod = (selPeriod === c.dataset.ym) ? null : c.dataset.ym;
+        syncHash(); renderReport(selected);
+      });
     });
     wrapEl.addEventListener('pointerleave', hideTip);
   }
   animatePanel();
 }
 
-/* ---------- wire the store ---------- */
-let lastSel = null;                 // work happens only when selection changes,
+/* ← Previous period | APRIL 2026 | Next period → */
+function stepPeriod(dir) {
+  const idx = C.PERIODS.indexOf(selPeriod || C.LAST_YM);
+  const next = C.PERIODS[idx + dir];
+  if (!next && !(dir > 0 && selPeriod)) return;
+  selPeriod = dir > 0 ? (idx === C.PERIODS.length - 1 ? null : next) : next;
+  syncHash();
+  renderReport(selected);
+}
 
-on((sel, hov) => {
+function downloadCsv(code) {
+  const csv = C.reportCsv(code);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ae-report-${code}${selPeriod ? '-' + selPeriod : ''}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+}
+
+/* ---------- wire the store ---------- */
+let lastSel = null, lastPeriod = null;
+on((sel, hov, ev) => {
   // cheap visual states react to every emit (hover included)
   listEl.querySelectorAll('.t-item').forEach(b => {
     const on_ = b.dataset.code === sel;
@@ -529,11 +763,17 @@ on((sel, hov) => {
   });
   applyMarkerStates();
 
+  if (ev === 'period' || (sel === lastSel && selPeriod !== lastPeriod)) {
+    lastPeriod = selPeriod;
+    if (sel) renderReport(sel);
+    return;
+  }
   if (sel === lastSel) return;      // hover-only change → stop here
   lastSel = sel;
+  lastPeriod = selPeriod;
   if (!sel) return;                 // panel always keeps the last report
 
-  syncHash(sel);
+  syncHash();
 
   trBody.hidden = false;
   const rep = document.getElementById('trust-report');
@@ -547,7 +787,7 @@ on((sel, hov) => {
 
   // every selection — marker, list or link — flies the camera to the
   // trust's actual location and zooms in close enough to read it
-  const g = geoByCode.get(sel);
+  const g = C.GEO_BY_CODE.get(sel);
   if (g) map.flyTo([g.lat, g.lon], Math.min(Math.max(map.getZoom(), 7.5), 9),
     { duration: REDUCED ? 0 : .8 });
 });
@@ -558,11 +798,13 @@ document.getElementById('map-reset').addEventListener('click', () => {
 });
 
 renderList('');
+renderLegend();
 applyMarkerStates();
 
-// open with a story on screen: #CODE deep link wins, else Birmingham
-const hashReq = typeof location !== 'undefined' ? location.hash.slice(1) : '';
-select(byCode.has(hashReq) ? hashReq : (byCode.has('RRK') ? 'RRK' : P.find(p => p[3] > 0)[0]));
+// open with a story on screen: #CODE[@period] deep link wins, else Birmingham
+const deep = C.parseHash();
+selPeriod = deep.period;
+select(deep.code || (C.BY_CODE.has('RRK') ? 'RRK' : P.find(p => p.att > 0).code));
 
 // Leaflet initialised while the section may be display-blocked far below the
 // fold — re-measure once it actually scrolls into view.
