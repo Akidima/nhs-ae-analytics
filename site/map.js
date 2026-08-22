@@ -728,6 +728,7 @@ function renderReport(code) {
   /* actions: export + share */
   const actionsHtml = `<div class="tr-actions">
     <button class="linklike" id="tr-csv" type="button">⬇ CSV</button>
+    <button class="linklike" id="tr-share" type="button">🖼 share card (PNG)</button>
     <button class="linklike" id="tr-copy" type="button">🔗 copy link</button>
     <button class="linklike" id="tr-print" type="button">🖨 print / PDF</button>
   </div>`;
@@ -810,6 +811,13 @@ function renderReport(code) {
 
   const csvBtn = document.getElementById('tr-csv');
   if (csvBtn) csvBtn.addEventListener('click', () => downloadCsv(code));
+  const shareBtn = document.getElementById('tr-share');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+      shareBtn.textContent = '⏳ rendering…';
+      renderShareCard(code, () => { shareBtn.textContent = '🖼 share card (PNG)'; });
+    });
+  }
   const copyBtn = document.getElementById('tr-copy');
   if (copyBtn) copyBtn.addEventListener('click', async () => {
     const url = location.origin + location.pathname + C.buildHash(code, selPeriod);
@@ -878,6 +886,39 @@ function gotoPeriod(ym) {
   renderReport(selected);
 }
 
+/* ───────────── shareable trust report card (PNG, client-side) ─────────────
+   1200×630 social-size summary of the selected trust, drawn as pure SVG in
+   the site's palette and rasterised through <canvas>. No external fonts,
+   images or libraries → untainted canvas, instant generation. Every value
+   comes from data-core for THIS trust only.                                */
+function escXml(s) {
+  return String(s).replace(/[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+}
+function wrapFor(text, maxChars) {
+  const words = String(text).split(' '), lines = [];
+  let cur = '';
+  words.forEach(w => {
+    if ((cur + ' ' + w).trim().length > maxChars && cur) { lines.push(cur.trim()); cur = w; }
+    else cur += ' ' + w;
+  });
+  if (cur.trim()) lines.push(cur.trim());
+  return lines;
+}
+/* deterministic per-trust "biggest discovery": strongest stat this trust's
+   own data supports */
+function trustDiscovery(t) {
+  if (t.dta != null && t.adm != null && t.adm > 0) {
+    return C.fmt(t.dta) + ' times last year, a patient waited 12+ hours on a trolley after doctors had decided to admit them — ' +
+      (Math.round(1000 * t.dta / t.adm) / 10) + '% of all emergency admissions.';
+  }
+  if (t.br != null && t.attCov > 0) {
+    return C.fmt(t.br) + ' visits waited longer than four hours last year — ' +
+      (Math.round(1000 * t.br / t.attCov) / 10) + '% of everyone who arrived.';
+  }
+  return 'This site kept the 95% promise in ' + t.met + ' of its ' + t.months + ' recent reporting months.';
+}
+
 function downloadCsv(code) {
   const csv = C.reportCsv(code);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -887,6 +928,88 @@ function downloadCsv(code) {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+}
+
+function buildShareSvg(code) {
+  const t = C.BY_CODE.get(code);
+  if (!t) return null;
+  const ctx = C.contextFor(code, null);
+  const perf = ctx && ctx.perf != null ? ctx.perf : null;
+  const engP = ctx ? ctx.eng : null;
+  const dEng = perf != null && engP != null ? perf - engP : null;
+  // hex mirrors of the site tokens — SVG rasterised via <img> cannot read
+  // CSS custom properties
+  const P = { bg: '#07090e', line: '#2b3648', dim: '#5c6a82', muted: '#9aa7bd',
+              ink: '#e8edf6', accent: '#5eead4', warm: '#fbbf24', hot: '#fb7185' };
+  const W = 1200, H = 630;
+
+  const nameLines = wrapFor(t.name, 34).slice(0, 2);
+  let yName = 158;
+  const nameSvg = nameLines.map((l, i) =>
+    '<text x="70" y="' + (yName + i * 52) + '" font-family="Georgia,serif" font-size="' +
+    (nameLines.length > 1 ? 40 : 46) + '" fill="' + P.ink + '">' + escXml(l) + '</text>').join('');
+  yName += nameLines.length * 52 - 10;
+
+  const discLines = wrapFor(trustDiscovery(t), 46).slice(0, 3);
+  const discSvg = discLines.map((l, i) =>
+    '<text x="620" y="' + (yName + 66 + i * 38) +
+    '" font-family="Helvetica,Arial,sans-serif" font-size="25" fill="' + P.muted + '">' +
+    escXml(l) + '</text>').join('');
+
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+    '<rect width="' + W + '" height="' + H + '" fill="' + P.bg + '"/>' +
+    '<rect width="' + W + '" height="5" fill="' + P.accent + '"/>' +
+    '<rect x="60" y="42" width="96" height="38" rx="4" fill="#005EB8"/>' +
+    '<text x="108" y="68" text-anchor="middle" font-family="Arial,sans-serif" font-style="italic" font-weight="700" font-size="26" fill="#ffffff">NHS</text>' +
+    '<text x="176" y="67" font-family="Menlo,Consolas,monospace" font-size="19" letter-spacing="3" fill="' + P.dim + '">A&amp;E · TRUST REPORT</text>' +
+    '<text x="' + (W - 60) + '" y="67" text-anchor="end" font-family="Menlo,Consolas,monospace" font-size="17" fill="' + P.warm + '">' +
+      escXml('last 12 months · to ' + C.monthLabel(C.LAST_YM)) + '</text>' +
+    nameSvg +
+    '<rect x="70" y="' + (yName - 26) + '" width="118" height="30" rx="15" fill="none" stroke="' + P.line + '"/>' +
+    '<text x="129" y="' + (yName - 5) + '" text-anchor="middle" font-family="Menlo,Consolas,monospace" font-size="16" fill="' + P.muted + '">' + escXml(code) + '</text>' +
+    (t.region ? '<text x="204" y="' + (yName - 4) + '" font-family="Helvetica,Arial,sans-serif" font-size="18" fill="' + P.dim + '">' + escXml(t.region) + '</text>' : '') +
+    '<text x="64" y="' + (yName + 96) + '" font-family="Georgia,serif" font-size="104" fill="' + P.accent + '">' +
+      (perf != null ? perf.toFixed(1) + '%' : 'n/a') + '</text>' +
+    '<text x="70" y="' + (yName + 132) + '" font-family="Menlo,Consolas,monospace" font-size="16" letter-spacing="2" fill="' + P.muted + '">LEFT WITHIN 4 HOURS · LAST 12 MONTHS</text>' +
+    '<line x1="600" y1="' + (yName - 30) + '" x2="600" y2="' + (H - 120) + '" stroke="' + P.line + '"/>' +
+    '<text x="632" y="' + (yName + 4) + '" font-family="Helvetica,Arial,sans-serif" font-size="27" fill="' + P.ink + '">England average: ' +
+      (engP != null ? engP.toFixed(1) + '%' : 'n/a') + '</text>' +
+    (dEng != null ? '<text x="632" y="' + (yName + 42) + '" font-family="Helvetica,Arial,sans-serif" font-size="27" fill="' +
+      (dEng >= 0 ? P.accent : P.hot) + '">' + (dEng >= 0 ? '+' : '') + dEng.toFixed(1) + ' percentage points vs England</text>' : '') +
+    '<text x="632" y="' + (yName + 92) + '" font-family="Menlo,Consolas,monospace" font-size="15" letter-spacing="3" fill="' + P.warm + '">WHAT STANDS OUT</text>' +
+    discSvg +
+    '<rect x="60" y="' + (H - 78) + '" width="' + (W - 120) + '" height="1" fill="' + P.line + '"/>' +
+    '<text x="60" y="' + (H - 44) + '" font-family="Menlo,Consolas,monospace" font-size="16" fill="' + P.accent + '">akidima.github.io/nhs-ae-analytics/#' + escXml(code) + '</text>' +
+    '<text x="' + (W - 60) + '" y="' + (H - 44) + '" text-anchor="end" font-family="Menlo,Consolas,monospace" font-size="15" fill="' + P.dim + '">Data © NHS England · OGL v3 · cleaned monthly reports</text>' +
+    '</svg>';
+  return svg;
+}
+
+function renderShareCard(code, done) {
+  const svg = buildShareSvg(code);
+  if (!svg) { if (done) done(); return; }
+  const W = 1200, H = 630;
+  // rasterise natively: same-origin blob SVG → canvas → PNG (untainted)
+  const img = new Image();
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  img.onload = () => {
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    cv.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = code + '-' + C.LAST_YM + '-report.png';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+      done();
+    }, 'image/png');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); done(); };
+  img.src = url;
 }
 
 /* ---------- wire the store ---------- */
@@ -955,5 +1078,6 @@ if (REDUCED) map.setView(HOME.center, HOME.zoom, { animate: false });
 
 // debug/testing hook (used by tmp/smoke checks & console poking)
 window.__aeMap = map;
+window.__aeShareSvg = buildShareSvg;
 }   // end start()
 })();

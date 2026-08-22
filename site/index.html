@@ -87,8 +87,33 @@ h3{font-family:var(--sans);font-weight:650;font-size:clamp(19px,2.4vw,24px);line
 h1{font-family:var(--serif);font-weight:400;font-size:clamp(44px,8.2vw,96px);line-height:1.02;
   letter-spacing:-.02em;max-width:12ch;text-wrap:balance;margin-bottom:26px}
 h1 em{font-style:italic;color:var(--accent)}
-.hero-sub{color:var(--muted);font-size:clamp(16px,2.2vw,20px);max-width:560px;margin-bottom:40px}
+.hero-sub{color:var(--muted);font-size:clamp(16px,2.2vw,20px);max-width:560px;margin-bottom:26px}
 .hero-sub strong{color:var(--ink);font-weight:600}
+
+/* headline gauge — first-screen answer, tokens only */
+.gauge{display:flex;align-items:center;gap:18px;margin-bottom:24px;
+  border:1px solid var(--line);border-radius:14px;background:rgba(var(--panel-wash),.55);
+  padding:12px 18px;max-width:460px}
+.g-dial{position:relative;width:96px;flex:none}
+.g-dial svg{display:block;width:100%;height:auto}
+.g-track{fill:none;stroke:rgba(148,163,184,.22);stroke-width:10;stroke-linecap:round}
+.g-val{fill:none;stroke:var(--accent);stroke-width:10;stroke-linecap:round}
+.g-target{stroke:var(--warm);stroke-width:2.5;stroke-linecap:round}
+.g-num{position:absolute;left:0;right:0;bottom:-6px;text-align:center;
+  font-family:var(--serif);font-size:27px;line-height:1;color:var(--ink)}
+.g-num .u{font-size:.55em;color:var(--dim)}
+.g-head{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:5px;line-height:1.45}
+.g-cap{font-size:13.5px;color:var(--muted);line-height:1.5;max-width:300px}
+.g-cap b{color:var(--warm)}
+@media (max-width:560px){
+  .gauge{gap:13px;padding:10px 13px;max-width:none}
+  .g-dial{width:74px}
+  .g-num{font-size:21px;bottom:-4px}
+  .g-cap{font-size:12.5px}
+  .hero-sub{margin-bottom:18px}
+  .gauge{margin-bottom:18px}
+}
 .hero-stats{display:flex;gap:clamp(24px,5vw,64px);flex-wrap:wrap;border-top:1px solid var(--line);
   padding-top:26px;margin-top:8px}
 .hstat .v{font-family:var(--serif);font-size:clamp(26px,3.6vw,40px);line-height:1.1;color:var(--ink)}
@@ -102,6 +127,12 @@ h1 em{font-style:italic;color:var(--accent)}
   animation:cue 2.2s ease-in-out infinite}
 @keyframes cue{0%,100%{opacity:.25;transform:scaleY(.55)}50%{opacity:1;transform:scaleY(1)}}
 @media (prefers-reduced-motion:reduce){.scroll-cue .line{animation:none}}
+/* keep the whole hero — gauge included — inside the first screen on short laptops */
+@media (max-height:780px){
+  #hero .wrap{padding-top:9vh;padding-bottom:6vh}
+  .hero-kicker{margin-bottom:16px}
+  h1{margin-bottom:18px}
+}
 
 /* light-theme component adjustments */
 html.light #hero-canvas{opacity:.9}
@@ -698,6 +729,22 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     <p class="hero-sub"><strong>Every month, every hospital A&amp;E in England files a report:</strong> how many
       people came, how many waited too long, and what happened next.
       This is that story — <strong>261,761,588 visits</strong> told in plain English.</p>
+    <div class="gauge" id="hero-gauge">
+      <div class="g-dial" aria-hidden="false">
+        <svg viewBox="0 0 120 74" role="img"
+          aria-label="National performance gauge. Loading latest figure.">
+          <path class="g-track" d="M12,64 A48,48 0 0 1 108,64" pathLength="100"/>
+          <path class="g-val" id="g-val" d="M12,64 A48,48 0 0 1 108,64" pathLength="100"
+            stroke-dasharray="0 100"/>
+          <line class="g-target" id="g-target" x1="101.5" y1="57.4" x2="113.3" y2="55.6"/>
+        </svg>
+        <div class="g-num"><span class="v num" id="g-vnum">–</span><span class="u">%</span></div>
+      </div>
+      <div class="g-text">
+        <p class="g-head">Seen within 4 hours — England, last reported month</p>
+        <p class="g-cap" id="g-cap">Loading the latest national figure…</p>
+      </div>
+    </div>
     <div class="hero-stats">
       <div class="hstat"><div class="v num" data-count="261761588">0</div><div class="k">A&amp;E attendances</div></div>
       <div class="hstat"><div class="v num" data-count="65259271">0</div><div class="k">Emergency admissions</div></div>
@@ -1202,11 +1249,11 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
 <script src="vendor/leaflet.js?v=17" defer></script>
 <script src="data/data.js?v=17" defer></script>
-<script src="app.js?v=17" defer></script>
+<script src="app.js?v=18" defer></script>
 <script src="data/geo.js?v=17" defer></script>
 <script src="data/uk_geo.js?v=17" defer></script>
 <script src="data/trust_hist.js?v=17" defer></script>
 <script src="data-core.js?v=17" defer></script>
-<script src="map.js?v=17" defer></script>
+<script src="map.js?v=18" defer></script>
 </body>
 </html>

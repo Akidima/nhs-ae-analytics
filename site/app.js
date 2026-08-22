@@ -204,6 +204,57 @@ function hideTip() { tip.classList.remove('on'); }
   });
 })();
 
+/* ─────────────────────────── headline performance gauge ─────────────────── */
+/* First-screen answer to "how is the NHS doing?": latest national 4-hour
+   performance against the 95% promise, from the same AE_MONTHLY export that
+   powers the trend charts. Arc fills left→right on a full 0–100 scale so the
+   gauge never exaggerates; the gold tick marks the 95% target.             */
+(function heroGauge() {
+  const el = document.getElementById('hero-gauge');
+  if (!el || !window.AE_MONTHLY) return;
+  const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rows = window.AE_MONTHLY.filter(r => r.pp != null && r.n >= 150 && r.pp <= 100);
+  const last = rows[rows.length - 1];
+  if (!last) { el.hidden = true; return; }
+  const perf = Math.round(last.pp * 10) / 10;
+  const MN = ['January','February','March','April','May','June',
+              'July','August','September','October','November','December'];
+  const [y, m] = last.p.split('-').map(Number);
+  const label = MN[m - 1] + ' ' + y;
+
+  // fill the arc: pathLength=100 → dasharray in percentage points
+  const val = el.querySelector('#g-val');
+  val.setAttribute('stroke-dasharray', perf + ' ' + (100 - perf));
+  val.setAttribute('aria-hidden', 'true');
+
+  // target tick at 95% along the same arc (r 42→54)
+  const a = Math.PI * (1 - .95);
+  const px = r => 60 + r * Math.cos(a), py = r => 64 - r * Math.sin(a);
+  const tick = el.querySelector('#g-target');
+  tick.setAttribute('x1', px(42).toFixed(1)); tick.setAttribute('y1', py(42).toFixed(1));
+  tick.setAttribute('x2', px(54).toFixed(1)); tick.setAttribute('y2', py(54).toFixed(1));
+
+  // text equivalents: visible caption + svg aria-label
+  const cap = el.querySelector('#g-cap');
+  cap.innerHTML = `About <b class="num">${perf.toFixed(1)}%</b> were seen within 4 hours in
+    ${label} — the NHS promise is <b class="num">95%</b>.`;
+  const svg = el.querySelector('svg');
+  svg.setAttribute('aria-label',
+    `Gauge: ${perf} percent of patients in England were seen within four hours in ${label}. ` +
+    `The target is 95 percent. Gold tick marks the target; teal arc shows performance.`);
+
+  // count-up like the hero stats beside it
+  const numEl = el.querySelector('#g-vnum');
+  if (REDUCED) { numEl.textContent = perf.toFixed(1); return; }
+  const t0 = performance.now(), dur = 1200;
+  (function frame(t) {
+    const k = Math.min(1, (t - t0) / dur);
+    const eased = 1 - Math.pow(1 - k, 3);
+    numEl.textContent = (perf * eased).toFixed(1);
+    if (k < 1) requestAnimationFrame(frame);
+  })(t0);
+})();
+
 /* ─────────────────────────── count-up hero stats ─────────────────────────── */
 (function heroCounts() {
   const els = document.querySelectorAll('[data-count]');
