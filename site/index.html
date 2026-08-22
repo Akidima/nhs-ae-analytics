@@ -223,6 +223,36 @@ html.light .site-head{background:rgba(255,255,255,.85)}
 .anno-strong{font-family:var(--mono);font-size:11.5px;fill:var(--ink);font-weight:600}
 .era-band{fill:rgba(125,211,252,.045)}
 .era-line{stroke:rgba(125,211,252,.35);stroke-width:1;stroke-dasharray:2 4}
+.gap-mark{fill:none;stroke:var(--warm);stroke-width:1.4;cursor:help}
+.gap-mark:hover,.gap-mark:focus-visible{fill:var(--warm);stroke-width:2}
+
+/* ── glossary inline terms ── */
+.gl{background:none;border:none;padding:0;font:inherit;color:inherit;
+  border-bottom:1px dashed var(--warm);cursor:help;text-align:left}
+.gl:hover,.gl:focus-visible{color:var(--warm)}
+.gl:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+/* ── chart data-table fallbacks ── */
+.chart-table{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px}
+.chart-table summary{cursor:pointer;font-family:var(--mono);font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.chart-table summary:hover,.chart-table summary:focus-visible{color:var(--accent)}
+.ct-wrap{max-height:300px;overflow:auto;margin-top:10px;scrollbar-width:thin}
+.chart-table table{border-collapse:collapse;font-size:12.5px;width:100%;
+  font-variant-numeric:tabular-nums}
+.chart-table th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--dim);text-align:left;padding:6px 12px 6px 0;
+  border-bottom:1px solid var(--line2);position:sticky;top:0;background:var(--panel)}
+.chart-table td{padding:4px 12px 4px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+.chart-table td:first-child{white-space:nowrap}
+
+/* ── dataset download buttons (method footer) ── */
+.dl-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.dl-btn{border:1px solid var(--line2);background:transparent;color:var(--muted);
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;border-radius:9px;
+  padding:10px 16px;cursor:pointer;transition:color .2s,border-color .2s;min-height:42px}
+.dl-btn:hover,.dl-btn:focus-visible{color:var(--accent);border-color:var(--accent)}
+.dl-note{margin-top:10px;font-size:12.5px;color:var(--dim);line-height:1.55}
 
 /* tooltip */
 #tip{position:fixed;z-index:90;pointer-events:none;background:#111827;border:1px solid var(--line2);
@@ -576,6 +606,7 @@ html.light .tr-tip{background:#ffffff;color:#16202e;border-color:rgba(22,32,46,.
   border:1px solid var(--line);overflow:hidden}
 .mb-bar{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
 .hue0{background:var(--accent)} .hue1{background:var(--cool)} .hue2{background:var(--warm)}
+.hue3{background:#a78bfa}
 .mb-v{text-align:right;color:var(--ink)}
 .x-note{display:block;margin-top:8px;font-size:10.5px;color:var(--dim)}
 
@@ -809,7 +840,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <div class="rec-cell hl"><div class="rv num">71.0%</div><div class="rk">left within 4 hours</div></div>
         <div class="rec-cell bad"><div class="rv num">13,939</div><div class="rk">waited longer than 4h</div></div>
         <div class="rec-cell"><div class="rv num">18,275</div><div class="rk">admitted to a ward</div></div>
-        <div class="rec-cell bad"><div class="rv num">2,187</div><div class="rk">waited on a trolley 12h+ <strong>after</strong> admission was decided</div></div>
+        <div class="rec-cell bad"><div class="rv num">2,187</div><div class="rk"><button class="gl" type="button" data-term="trolley">waited on a trolley 12h+</button> <strong>after</strong> admission was decided</div></div>
       </div>
       <p class="rec-note">Read it like a person: <span class="say">“Nearly 50,000 people came to us in July.
         Almost three in ten waited over four hours. And on 2,187 occasions, we had already decided to admit someone —
@@ -820,21 +851,21 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     <div class="doors" role="tablist" aria-label="Types of emergency department">
       <button class="door major sel" role="tab" aria-selected="true" data-door="major" id="door-major">
         <span class="d-glyph" style="color:var(--accent)">🏥</span>
-        <h4>Type 1 — Consultant-led A&amp;E</h4>
+        <h4><button class="gl" type="button" data-term="type1">Type 1 — Consultant-led A&amp;E</button></h4>
         <span class="d-k">the classic hospital emergency department</span>
         <div class="d-share num">63.9<span class="u">% of visits</span></div>
         <p class="d-perf">Last 12 months, <b class="num">61%</b> were seen within 4 hours.</p>
       </button>
       <button class="door walkin" role="tab" aria-selected="false" data-door="walkin" id="door-walkin">
         <span class="d-glyph" style="color:var(--cool)">🚪</span>
-        <h4>Type 3 — Walk-in &amp; urgent care</h4>
+        <h4><button class="gl" type="button" data-term="type1">Type 3 — Walk-in &amp; urgent care</button></h4>
         <span class="d-k">minor injuries, no appointment needed</span>
         <div class="d-share num">33.8<span class="u">% of visits</span></div>
         <p class="d-perf">Last 12 months, <b class="num">96.9%</b> were seen within 4 hours.</p>
       </button>
       <button class="door other" role="tab" aria-selected="false" data-door="other" id="door-other">
         <span class="d-glyph" style="color:var(--dim)">🛏️</span>
-        <h4>Type 2 — Single speciality</h4>
+        <h4><button class="gl" type="button" data-term="type1">Type 2 — Single speciality</button></h4>
         <span class="d-k">e.g. eye casualty · rare and small</span>
         <div class="d-share num">2.2<span class="u">% of visits</span></div>
         <p class="d-perf">A rounding error in the national story — <b>1 in 45 visits</b>.</p>
@@ -1118,7 +1149,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <div class="f-num" aria-hidden="true">3</div>
         <h3>Trolley waits grew nineteen-fold in five years.</h3>
         <div class="f-body">In January 2021 there were <strong class="num">3,825</strong> occasions nationwide when an
-          admitted patient waited 12+ hours for a bed. By January 2026: <strong class="num">71,517</strong>.
+          admitted patient <button class="gl" type="button" data-term="trolley">waited 12+ hours for a bed</button>. By January 2026: <strong class="num">71,517</strong>.
           <span class="say">This may suggest the sharpest deterioration isn't at the front door at all — it's the flow inside the hospital.</span></div>
         <div class="f-proof">
           <div class="fp"><div class="v num">3,825 → 71,517</div><div class="k">monthly 12h trolley waits, Jan '21 → Jan '26</div></div>
@@ -1179,7 +1210,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       <div class="take">
         <div class="t-k">The human sum</div>
         <div class="t-v">Behind the averages: <span class="num">6.5 million</span> breached waits last year and
-          <span class="num">553,345</span> twelve-hour trolley waits. <span class="say">Every number on this page
+          <span class="num">553,345</span> <button class="gl" type="button" data-term="trolley">twelve-hour trolley waits</button>. <span class="say">Every number on this page
           is a person who waited.</span></div>
       </div>
     </div>
@@ -1232,7 +1263,24 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
           <li>Rates computed only over months where waits were published</li>
           <li>No estimates, no projections, no invented values</li>
           <li>Facts say <em>“the data shows…”</em>; readings say <em>“this may suggest…”</em></li>
+          <li>Accessibility: every major chart has a data-table equivalent; glossary terms are
+            keyboard-focusable; motion respects <code>prefers-reduced-motion</code>; key findings never
+            rely on colour alone; palette checked for blue-green/red separation with lightness contrast.</li>
         </ul>
+      </div>
+      <div>
+        <h4>Take the data with you</h4>
+        <p>The same cleaned tables this page is built from — free to reuse under the
+          Open Government Licence v3 with attribution.</p>
+        <div class="dl-row">
+          <button class="dl-btn" id="dl-nat-csv" type="button">⬇ national · CSV</button>
+          <button class="dl-btn" id="dl-prov-csv" type="button">⬇ trusts (12m) · CSV</button>
+          <button class="dl-btn" id="dl-json" type="button">⬇ everything · JSON</button>
+        </div>
+        <p class="dl-note">Contains public sector information licensed under the
+          <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" rel="license">Open
+          Government Licence v3</a>. Missing periods export as gaps, never zeros. The JSON bundle includes the
+          per-trust monthly history and its packing scheme.</p>
       </div>
     </div>
     <div class="foot">
@@ -1249,11 +1297,11 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
 <script src="vendor/leaflet.js?v=17" defer></script>
 <script src="data/data.js?v=17" defer></script>
-<script src="app.js?v=18" defer></script>
+<script src="app.js?v=19" defer></script>
 <script src="data/geo.js?v=17" defer></script>
 <script src="data/uk_geo.js?v=17" defer></script>
 <script src="data/trust_hist.js?v=17" defer></script>
 <script src="data-core.js?v=17" defer></script>
-<script src="map.js?v=18" defer></script>
+<script src="map.js?v=19" defer></script>
 </body>
 </html>

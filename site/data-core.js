@@ -513,11 +513,39 @@ function shortName(name) {
   return cut.length > 22 ? cut.slice(0, 21) + '…' : cut;
 }
 
+/* ---------- similar-sized cohort: same front-door type, same size band ----------
+   Peers are same-kind trusts ranked into four attendance quartiles; the
+   selected trust's band is the cohort. Aggregate comes from real rows only. */
+const cohortCache = new Map();
+function cohortStats(code) {
+  const t = BY_CODE.get(code);
+  if (!t || !(t.attCov > 0)) return null;
+  if (cohortCache.has(code)) return cohortCache.get(code);
+  const peers = TRUSTS.filter(x => x.kind === t.kind && x.attCov > 0 && x.att > 0)
+    .sort((a, b) => a.att - b.att);
+  const per = Math.max(1, Math.ceil(peers.length / 4));
+  let rank = peers.findIndex(x => x.code === code);
+  if (rank < 0) rank = peers.length - 1;
+  const band = Math.floor(rank / per);
+  const members = peers.slice(band * per, (band + 1) * per);
+  let cov = 0, w4 = 0, att = 0;
+  members.forEach(m => { cov += m.attCov; w4 += m.w4; att += m.att; });
+  const mid = Math.round(att / members.length);
+  const out = {
+    n: members.length, cov, w4, att,
+    perf: cov > 0 ? 100 * w4 / cov : null,
+    label: mid >= 400000 ? 'over 400K visits' : mid >= 250000 ? '250–400K visits'
+         : mid >= 120000 ? '120–250K visits' : 'under 120K visits'
+  };
+  cohortCache.set(code, out);
+  return out;
+}
+
 window.AECORE = {
   TRUSTS, BY_CODE, GEO_BY_CODE, PERIODS, MONTHS: MN,
   history, recordAt, currentRecord,
   england12m, englandMonth, englandMonthPerf,
-  regionOf, regionStats, regionMonthStats, contextFor,
+  regionOf, regionStats, regionMonthStats, contextFor, cohortStats,
   insights, explainer, fmt, fmtShort, monthLabel,
   parseHash, buildHash, reportCsv,
   MAP_METRICS, mapMetricValue, mapMetricBuckets, mapMetricColor, mapMetricChange, compareRows,

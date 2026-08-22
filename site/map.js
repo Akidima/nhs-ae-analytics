@@ -365,12 +365,14 @@ function buildJourney(t, rec) {
 /* ---------- explainable metric tiles ---------- */
 let expSeq = 0;
 function tile(t) {
+  const kHtml = t.gloss
+    ? `<button class="gl" type="button" data-term="${t.gloss}">${t.k}</button>` : t.k;
   if (!t.explain) return `<div class="tr-stat ${t.cls || ''}">
-    <span class="k">${t.k}</span><span class="v num">${t.v}</span>
+    <span class="k">${kHtml}</span><span class="v num">${t.v}</span>
     ${t.x ? `<span class="x">${t.x}</span>` : ''}</div>`;
   const id = 'exp' + (++expSeq);
   return `<div class="tr-stat ${t.cls || ''}">
-    <span class="k">${t.k}</span><span class="v num">${t.v}</span>
+    <span class="k">${kHtml}</span><span class="v num">${t.v}</span>
     ${t.x ? `<span class="x">${t.x}</span>` : ''}
     <button class="linklike exp-btn" type="button" aria-expanded="false"
       aria-controls="${id}">What does this mean?</button>
@@ -466,10 +468,10 @@ function renderReport(code) {
         x: pct >= 95 ? 'promise kept this month' : pct < 60 ? 'a very difficult month' : '',
         cls: pct >= 95 ? 'good' : pct < 60 ? 'hot' : '',
         explain: C.explainer('w4', rec.w4, { perf: pct }) },
-      { k: 'waited longer than 4h', v: C.fmt(rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0)),
+      { k: 'waited longer than 4h', gloss: 'breach', v: C.fmt(rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0)),
         x: `${(100 - pct).toFixed(1)}% of visits breached`, cls: (100 - pct) >= 30 ? 'hot' : '',
         explain: C.explainer('br', rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0), {}) },
-      { k: 'waited on a trolley 12h+', v: rec.dta != null ? C.fmt(rec.dta) : 'Data unavailable',
+      { k: 'waited on a trolley 12h+', gloss: 'trolley', v: rec.dta != null ? C.fmt(rec.dta) : 'Data unavailable',
         x: rec.dta != null ? 'no ward bed after decision to admit' : 'not published this month', cls: '',
         explain: rec.dta != null ? C.explainer('dta', rec.dta, {}) : null },
       { k: 'emergency admissions', v: rec.adm != null ? C.fmt(rec.adm) : 'Data unavailable',
@@ -487,11 +489,11 @@ function renderReport(code) {
           : l12perf < eng.perf ? 'below England average' : 'above England average',
         cls: l12perf == null ? '' : (l12perf >= 95 ? 'good' : l12perf < 60 ? 'hot' : ''),
         explain: C.explainer('w4', t.w4, { perf: l12perf }) },
-      { k: 'waited longer than 4h', v: brTotal != null ? C.fmt(brTotal) : 'Data unavailable',
+      { k: 'waited longer than 4h', gloss: 'breach', v: brTotal != null ? C.fmt(brTotal) : 'Data unavailable',
         x: brShare != null ? `${brShare}% of visits breached` : '',
         cls: brShare != null && brShare >= 30 ? 'hot' : '',
         explain: C.explainer('br', brTotal, {}) },
-      { k: 'waited on a trolley 12h+', v: t.dta != null ? C.fmt(t.dta) : 'Data unavailable',
+      { k: 'waited on a trolley 12h+', gloss: 'trolley', v: t.dta != null ? C.fmt(t.dta) : 'Data unavailable',
         x: t.dta ? 'no ward bed after decision to admit' : '', cls: '',
         explain: C.explainer('dta', t.dta, {}) },
       { k: 'emergency admissions', v: t.adm != null ? C.fmt(t.adm) : 'Data unavailable',
@@ -681,6 +683,7 @@ function renderReport(code) {
   }
 
   /* regional context — computed from real trust rows only */
+  const coh = C.cohortStats(code);
   let regionHtml = '';
   const reg = t.region ? C.regionStats(t.region) : null;
   regionHtml = `<div class="tr-block"><h4>Where this trust sits</h4><div class="tr-note">
@@ -694,12 +697,16 @@ function renderReport(code) {
         ? `So this trust performs <b>better than</b> its regional average.`
         : `So this trust performs <b>below</b> its regional average.` : ''}
     ${reg ? `<div class="mini-bars">
-      ${[['This trust', l12perf], [t.region || 'Region', reg ? reg.perf : null], ['England', eng.perf]].map(([k, v], i) =>
+      ${[['This trust', l12perf],
+         [t.region || 'Region', reg ? reg.perf : null],
+         coh ? [`Similar size · ${coh.label} (${coh.n})`, coh.perf] : null,
+         ['England', eng.perf]].filter(Boolean).map(([k, v], i) =>
         `<div class="mb-row"><span class="mb-k">${k}</span>
          <span class="mb-track">${v != null ? `<span class="mb-bar hue${i}" style="width:${Math.max(2, (v - 40) / 60 * 100)}%"></span>` : '<span class="nodata-inline">no data</span>'}</span>
          <span class="mb-v num">${v != null ? v.toFixed(1) + '%' : '—'}</span></div>`).join('')}
     </div>` : ''}
-    <span class="x-note">Bars share one 40–100% scale. Regional averages aggregate real monthly reports from trusts placed
+    <span class="x-note">Bars share one 40–100% scale. “Similar size” aggregates same-type trusts in the same
+    attendance quartile (${coh ? coh.n : 0} peers) — real rows, no re-weighting. Regional averages aggregate real monthly reports from trusts placed
     in the region by their registered postcode — nothing is estimated.</span></div></div>`;
 
   /* deterministic insights */

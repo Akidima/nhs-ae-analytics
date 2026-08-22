@@ -453,6 +453,59 @@ function hideTip() { tip.classList.remove('on'); }
   svgEl('circle', { cx: x(iLast), cy: y(data[iLast].perf), r: 4.5, fill: 'var(--warm)' }, svg);
   svgEl('text', { class: 'anno-strong', x: x(iLast) - 4, y: y(data[iLast].perf) - 12, 'text-anchor': 'end', fill: 'var(--warm)' }, svg)
     .textContent = '75.4% — July 2026';
+
+  /* historical context events — dated facts from the period, short labels */
+  [
+    { ym: '2021-12', label: 'omicron wave', ly: m.t + ih * .18 },
+    { ym: '2022-12', label: "first nurses' strike", ly: m.t + ih * .34 }
+  ].forEach(ev => {
+    const i = data.findIndex(d => d.ym === ev.ym);
+    if (i < 0 || !okPt(data[i])) return;
+    svgEl('line', { class: 'era-line', x1: x(i), x2: x(i), y1: m.t, y2: m.t + ih }, svg);
+    const tx = svgEl('text', { class: 'anno', x: x(i) + 6, y: ev.ly }, svg);
+    tx.textContent = ev.label;
+  });
+
+  /* visible markers for incomplete months in our copy (see caveats):
+     months absent from the series or too sparse to draw. Gold hollow
+     diamonds on the baseline; hover for the reason.                    */
+  function incompleteMonths() {
+    const have = new Map(M.map(r => [r.p, r]));
+    const out = [];
+    let [yy, mm] = M[0].p.split('-').map(Number);
+    const end = M[M.length - 1].p;
+    while (true) {
+      const p = yy + '-' + String(mm).padStart(2, '0');
+      if (p > end) break;
+      const r = have.get(p);
+      if (!r || !(r.n >= 150) || r.pp == null || r.pp > 100) out.push(p);
+      mm++; if (mm > 12) { mm = 1; yy++; }
+    }
+    return out;
+  }
+  window.__aeIncompleteMonths = incompleteMonths();
+  const gaps = incompleteMonths();
+  gaps.forEach(ym => {
+    let li = -1, ri = -1;
+    for (let k = 0; k < data.length; k++) {
+      if (data[k].ym < ym) li = data[k].i;
+      if (ri < 0 && data[k].ym > ym) ri = data[k].i;
+    }
+    if (li < 0 && ri < 0) return;
+    const cx = li >= 0 && ri >= 0 ? (x(li) + x(ri)) / 2 : (li >= 0 ? x(li) : x(ri));
+    const cy = m.t + ih + 8;
+    const msg = `${monthName(ym)} — incomplete month in our copy (few or no provider files). National figures for this month should be read with care.`;
+    const g = svgEl('path', {
+      class: 'gap-mark', d: `M${cx.toFixed(1)},${cy - 5} L${(cx + 5).toFixed(1)},${cy} L${cx.toFixed(1)},${cy + 5} L${(cx - 5).toFixed(1)},${cy} Z`,
+      tabindex: '0', role: 'img',
+      'aria-label': msg
+    }, svg);
+    const act = ev => showTip(`<div class="t-date">INCOMPLETE MONTH</div>${msg}`, ev.clientX || 0, ev.clientY || 0);
+    g.addEventListener('pointerenter', ev => { g.setAttribute('fill', 'var(--warm)'); act(ev); });
+    g.addEventListener('focus', () => { const r = svg.getBoundingClientRect(); act({ clientX: r.left + cx / W * r.width, clientY: r.top }); });
+    g.addEventListener('pointerleave', () => { g.setAttribute('fill', 'none'); hideTip(); });
+    g.addEventListener('blur', () => { g.setAttribute('fill', 'none'); hideTip(); });
+  });
 })();
 
 /* ═══════════════════════════ CHART 2 · TWO WORLDS ═══════════════════════════ */
@@ -796,6 +849,142 @@ function hideTip() { tip.classList.remove('on'); }
       box.style.opacity = 0;
       setTimeout(() => { box.innerHTML = details[d.dataset.door]; box.style.opacity = 1; }, REDUCED ? 0 : 160);
     });
+  });
+})();
+
+/* ═══════════════════════════ inline glossary ═══════════════════════════ */
+/* Dotted-underline terms open a plain-English tooltip on hover/tap/focus.
+   Definitions reuse the site's own metric language — nothing invented.   */
+(function glossary() {
+  const TERMS = {
+    trolley: 'A “trolley wait” is time spent in A&E after doctors have decided to admit someone to a ward, while they wait for a bed to become free.',
+    breach: 'A breach is a visit that ended more than four hours after arrival — the 4-hour promise was missed for that visit.',
+    type1: 'Type 1 departments are consultant-led A&Es — the classic hospital emergency department, distinct from walk-in/urgent-care centres.'
+  };
+  document.querySelectorAll('.gl[data-term]').forEach(el => {
+    const term = TERMS[el.dataset.term];
+    if (!term) return;
+    el.setAttribute('aria-label', el.textContent.trim() + ' — what does this mean?');
+    const act = () => {
+      const r = el.getBoundingClientRect();
+      showTip(`<div class="t-date">PLAIN ENGLISH</div>${term}`, r.left + r.width / 2, r.top);
+    };
+    el.addEventListener('pointerenter', act);
+    el.addEventListener('focus', act);
+    el.addEventListener('pointerleave', hideTip);
+    el.addEventListener('blur', hideTip);
+    el.addEventListener('click', ev => { ev.preventDefault(); act(); });
+    el.addEventListener('keydown', ev => { if (ev.key === 'Escape') hideTip(); });
+  });
+})();
+
+/* ═══════════════════════ chart data-table fallbacks ═══════════════════════
+   Every major chart gains an optional real <table> built from the same
+   arrays the SVG uses — screen-reader friendly and useful for everyone.   */
+(function chartTables() {
+  const fmtPct = v => v == null ? '' : v.toFixed(1) + '%';
+  function table(headers, rows) {
+    return '<table><thead><tr>' + headers.map(h => `<th scope="col">${h}</th>`).join('') +
+      '</tr></thead><tbody>' + rows.map(r =>
+        '<tr>' + r.map(c => `<td${typeof c === 'number' ? ' class="num"' : ''}>${c}</td>`).join('') + '</tr>'
+      ).join('') + '</tbody></table>';
+  }
+  function attach(svgId, headers, rowsFn) {
+    const svg = document.getElementById(svgId);
+    if (!svg) return;
+    const wrap = svg.closest('.chart-wrap') || svg.parentElement;
+    const det = document.createElement('details');
+    det.className = 'chart-table';
+    det.innerHTML = '<summary>View the numbers behind this chart</summary><div class="ct-wrap"></div>';
+    det.addEventListener('toggle', () => {           // build once, on first open
+      if (!det.open || det.querySelector('table')) return;
+      det.querySelector('.ct-wrap').innerHTML = table(headers(), rowsFn());
+    });
+    wrap.insertAdjacentElement('afterend', det);
+  }
+  attach('slide-chart',
+    () => ['Month', '% seen within 4 hours', 'Providers reporting'],
+    () => M.filter(r => r.pp != null && r.n >= 150 && r.pp <= 100)
+           .map(r => [monthName(r.p), r.pp.toFixed(1) + '%', r.n]));
+  attach('doors-chart',
+    () => ['Month', 'All A&E', 'Consultant-led (Type 1)', 'Walk-in / urgent care'],
+    () => M.slice(M.findIndex(r => r.p === '2017-04'))
+      .filter(r => r.ac > 0 && r.n >= 150)
+      .map(r => [monthName(r.p),
+        fmtPct(100 * r.wc / r.ac),
+        (r.x1 > 0 && r.y1 != null) ? fmtPct(100 * (r.x1 - r.y1) / r.x1) : '',
+        (r.x3 > 0 && r.y3 != null) ? fmtPct(100 * (r.x3 - r.y3) / r.x3) : '']));
+  attach('trolley-chart',
+    () => ['Month', '12-hour trolley waits'],
+    () => M.filter(r => r.p >= '2017-01' && r.d != null)
+           .map(r => [monthName(r.p), (+r.d).toLocaleString('en-GB')]));
+  attach('season-chart',
+    () => ['Calendar month', '% seen within 4 hours (11-year avg)', 'Busyness vs average'],
+    () => {
+      const MN2 = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const perf = [73.6, 74.0, 75.3, 77.8, 77.2, 77.7, 77.3, 78.9, 76.1, 76.6, 74.2, 74.3];
+      const idx = [97, 92, 101, 94, 103, 102, 105, 100, 101, 104, 101, 100];
+      return MN2.map((m2, i) => [m2, perf[i].toFixed(1) + '%', idx[i]]);
+    });
+})();
+
+/* ═══════════════════════ dataset download (OGL v3) ═══════════════════════ */
+/* Client-side exports straight from the page's own warehouse exports —
+   no pipeline changes. Licence text travels inside every file.            */
+(function datasetExport() {
+  const OGL = '# Source: NHS England monthly "A&E Attendances and Emergency Admissions"\n' +
+    '# statistics — cleaned monthly reports (one row per site per month).\n' +
+    '# Contains public sector information licensed under the Open Government Licence v3:\n' +
+    '#   https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/\n';
+  function dl(name, text, mime) {
+    const b = new Blob([text], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+  }
+  const btn = id => document.getElementById(id);
+  const nCsv = () => {
+    let [y0, m0] = M[0].p.split('-').map(Number);
+    const end = M[M.length - 1].p;
+    const have = new Map(M.map(r => [r.p, r]));
+    const rows = [];
+    while (true) {
+      const p = y0 + '-' + String(m0).padStart(2, '0');
+      if (p > end) break;
+      const r = have.get(p);
+      if (r) rows.push([p, r.a ?? '', r.am ?? '', r.d ?? '', r.n ?? '', r.ac ?? '', r.wc ?? '', r.pp ?? ''].join(','));
+      else rows.push(p);
+      m0++; if (m0 > 12) { m0 = 1; y0++; }
+    } // missing months are exported as bare period markers, never zeros
+    return OGL + '# Missing periods are listed as bare dates — they are gaps in our copy, not zeros.\n' +
+      'period,attendances,emergency_admissions,twelve_hour_trolley_waits,providers_reporting,' +
+      'covered_attendances,within_4h,published_within_4h_pct\n' + rows.join('\n');
+  };
+  const pCsv = () => OGL + '# Rolling last-12-reported-months roll-up per reporting site.\n' +
+    'org_code,org_name,site_type,attendances,type1_attendance,type3_attendance,' +
+    'covered_attendances,within_4h,breaches,emergency_admissions,trolley_waits_12h,reported_months,months_met_95pct\n' +
+    P.map(p => [p[0], '"' + p[1].replace(/"/g, '""') + '"', p[2],
+      ...p.slice(3)].join(',')).join('\n');
+  const jAll = () => JSON.stringify({
+    license: 'Contains public sector information licensed under the Open Government Licence v3',
+    source: 'NHS England monthly A&E statistics — cleaned monthly reports (fct_ae_activity)',
+    generated: new Date().toISOString().slice(0, 10),
+    window: { first: M.length ? M[0].p : null, last: M.length ? M[M.length - 1].p : null },
+    national_monthly: M,
+    providers_last_12_months: C0(),
+    trust_history: window.AE_TRUST_HIST ? { months: window.AE_TRUST_MONTHS, packed: window.AE_TRUST_HIST } : null,
+    packing: { row: '[att/10, waitsPublished(0/1), within4/10, t1Att/1000, t1Breaches/1000, admissions/1000, trolley12h/1000]' }
+  });
+  function C0() { return (window.AE_PROVIDERS || []).map((p, i) => ({ code: p[0], name: p[1], kind: p[2], att: p[3], attT1: p[4], attT3: p[5], covered: p[6], within4: p[7], breaches: p[8], admissions: p[9], trolley12h: p[10], months: p[11], met95: p[12], _i: i })).map(o => { delete o._i; return o; }); }
+  [['dl-nat-csv', () => dl('nhs-ae-national-monthly.csv', nCsv(), 'text/csv;charset=utf-8')],
+   ['dl-prov-csv', () => dl('nhs-ae-providers-last12.csv', pCsv(), 'text/csv;charset=utf-8')],
+   ['dl-json', () => dl('nhs-ae-cleaned-dataset.json', jAll(), 'application/json')]
+  ].forEach(([id, fn]) => {
+    const b = btn(id);
+    if (b) b.addEventListener('click', () => { try { fn(); } catch (e) { console.error(e); } });
   });
 })();
 

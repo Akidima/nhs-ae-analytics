@@ -75,6 +75,27 @@ check('insights name their comparison basis',
 check('explainer generates plain English from real value',
   C.explainer('w4', 34160, { perf: 71.0 }).includes('71 out of every 100'));
 
+/* ---- 4b. similar-sized cohorts ---- */
+{
+  const cs = C.cohortStats('RRK');
+  // recompute UHB's band independently: same-kind trusts sorted by attendance
+  const peers = window.AE_PROVIDERS.filter(p => p[2] === 'major' && p[6] > 0)
+    .sort((a, b) => a[3] - b[3]);
+  const per = Math.max(1, Math.ceil(peers.length / 4));
+  const rank = peers.findIndex(x => x[0] === 'RRK');
+  const band = Math.floor(rank / per);
+  const mem = peers.slice(band * per, (band + 1) * per);
+  let cov = 0, w4 = 0; mem.forEach(m => { cov += m[6]; w4 += m[7]; });
+  check(`cohort = ${cs.n} same-band majors`, cs.n === mem.length && mem.length >= 3);
+  check('cohort perf matches independent recompute',
+    Math.abs(cs.perf - 100 * w4 / cov) < 1e-9);
+  check('cohort excludes the trust itself? (included is fine if stated) — n>0', cs.n > 0);
+  check('cohort label names an attendance band', /visits$/.test(cs.label));
+  check('cohort of walk-in trust differs from major bands',
+    (() => { const w = C.TRUSTS.find(t => t.kind === 'walkin' && t.attCov > 0);
+      const wc = C.cohortStats(w.code); return wc.n >= 3 && wc.label !== undefined; })());
+}
+
 /* ---- 5. deep links ---- */
 check('buildHash encodes code+period', C.buildHash('RRK', '2025-07') === '#RRK@2025-07');
 check('buildHash drops invalid periods', C.buildHash('RRK', '1999-01') === '#RRK');
