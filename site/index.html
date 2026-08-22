@@ -385,7 +385,7 @@ body{padding-top:52px}
 .map-reset:hover{color:var(--accent);border-color:var(--accent)}
 
 /* right report panel */
-.trust-report{border-left:1px solid var(--line);padding:20px;overflow-y:auto;
+.trust-report{border-left:1px solid var(--line);padding:14px 16px;overflow-y:auto;
   background:rgba(var(--panel-wash),.55);scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 .tr-empty{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:12.5px;height:100%;
   justify-content:center;text-align:center;padding:16px 8px}
@@ -398,7 +398,7 @@ body{padding-top:52px}
 .tr-kicker{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;
   letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
 .tr-name{font-family:var(--serif);font-size:clamp(18px,1.8vw,22px);line-height:1.25;margin-bottom:4px}
-.tr-window{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em;margin-bottom:18px}
+.tr-window{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em;margin-bottom:12px}
 .tr-metrics{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .tr-metric{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:10px;
   border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:rgba(var(--wash),.45)}
@@ -408,12 +408,14 @@ body{padding-top:52px}
 .tr-metric .v{font-family:var(--serif);font-size:clamp(19px,1.8vw,24px);white-space:nowrap}
 .tr-metric.hot .v{color:var(--hot)} .tr-metric.good .v{color:var(--accent)}
 .tr-metric .x{grid-column:1/-1;font-size:11px;color:var(--dim);margin-top:-6px;line-height:1.4}
-.tr-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-.tr-badge{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
-  border:1px solid var(--line2);border-radius:999px;padding:4px 10px;color:var(--muted)}
-.tr-badge.major{color:var(--accent);border-color:rgba(94,234,212,.35);background:rgba(94,234,212,.06)}
-.tr-badge.walkin{color:var(--cool);border-color:rgba(125,211,252,.35);background:rgba(125,211,252,.06)}
-.tr-block{margin-top:20px}
+.tr-statgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:2px}
+.tr-stat{border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:rgba(var(--wash),.45)}
+.tr-stat .k{display:block;font-size:9.5px;color:var(--dim);line-height:1.3}
+.tr-stat .v{display:block;font-family:var(--serif);font-size:15.5px;line-height:1.25;margin-top:2px;white-space:nowrap}
+.tr-stat .x{display:block;font-size:9px;color:var(--dim);margin-top:2px;line-height:1.25}
+.tr-stat.good{border-color:rgba(94,234,212,.3)} .tr-stat.good .v{color:var(--accent)}
+.tr-stat.hot{border-color:rgba(251,113,133,.35)} .tr-stat.hot .v{color:var(--hot)}
+.tr-block{margin-top:12px}
 .tr-block h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--dim);margin-bottom:10px}
 .tr-spark{width:100%;height:auto;display:block}
@@ -978,12 +980,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=3" defer></script>
-<script src="data/data.js?v=3" defer></script>
-<script src="app.js?v=3" defer></script>
-<script src="data/geo.js?v=3" defer></script>
-<script src="data/uk_geo.js?v=3" defer></script>
-<script src="data/trust_hist.js?v=3" defer></script>
-<script src="map.js?v=3" defer></script>
+<script src="vendor/leaflet.js?v=4" defer></script>
+<script src="data/data.js?v=4" defer></script>
+<script src="app.js?v=4" defer></script>
+<script src="data/geo.js?v=4" defer></script>
+<script src="data/uk_geo.js?v=4" defer></script>
+<script src="data/trust_hist.js?v=4" defer></script>
+<script src="map.js?v=4" defer></script>
 </body>
 </html>

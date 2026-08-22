@@ -257,7 +257,7 @@ function renderReport(code) {
   }
 
   // national rank: where this trust sits on % within 4h across all ranked trusts
-  let rankHtml = '';
+  let rankInfo = null;
   if (l12perf != null) {
     const ranked = P.filter(p => p[6] > 0)
       .map(p => ({ code: p[0], pct: 100 * p[7] / p[6] }))
@@ -267,73 +267,58 @@ function renderReport(code) {
       const quart = pos < ranked.length / 4 ? 'top quarter' :
                     pos < ranked.length / 2 ? 'upper half' :
                     pos < ranked.length * 3 / 4 ? 'lower half' : 'bottom quarter';
-      rankHtml = `<div class="tr-note">Ranked <b class="num">#${pos + 1}</b> of
-        <b class="num">${ranked.length}</b> trusts on four-hour performance —
-        <span class="say">${quart} in England</span>.</div>`;
+      rankInfo = { pos: pos + 1, total: ranked.length, quart };
     }
   }
 
-  // year-on-year trend from the monthly history
-  let trendNote = '';
+  // year-on-year change (percentage points) from the monthly history
+  let trendD = null;
   if (hist && l12perf != null) {
     const covRows = hist.filter(h => h.cov);
     const tail = covRows.slice(-12), prev = covRows.slice(-24, -12);
     const avg = rows => rows.length ? rows.reduce((s, h) => s + h.w4, 0) / rows.reduce((s, h) => s + h.att, 0) * 100 : null;
     const now = avg(tail), before = avg(prev);
-    if (now != null && before != null && isFinite(before)) {
-      const d = now - before;
-      trendNote = `<div class="tr-note">Versus the previous twelve months:
-        <b class="num">${d >= 0 ? '+' : ''}${d.toFixed(1)}pp</b>
-        ${d >= 0 ? '<span style="color:var(--accent)">▲ improving</span>' : '<span style="color:var(--hot)">▼ declining</span>'}.</div>`;
-    }
+    if (now != null && before != null && isFinite(before)) trendD = now - before;
   }
 
   const kindName = t.kind === 'major' ? 'major A&E trust'
                  : t.kind === 'walkin' ? 'walk-in / community sites'
                  : 'single-speciality site';
 
-  // rolling-twelve-month scorecard
-  const l12Metrics = [
-    { k: 'attended over the last 12 months', v: t.att != null ? fmtFull(t.att) : 'Data unavailable',
-      x: perDay ? `about ${fmtShort(perDay)} arrivals every day` : '', cls: '' },
-    { k: 'seen within four hours · 12-month share', v: l12perf != null ? l12perf.toFixed(1) + '%' : 'Data unavailable',
-      x: l12perf == null ? '' : l12perf >= 95 ? 'the promise kept, on average'
-        : l12perf < 75.1 ? 'worse than the England average' : 'better than the England average',
+  // ── compact scorecard: everything above the fold, nothing to scroll ──
+  const tiles = [
+    { k: 'attended · last 12 months', v: t.att != null ? fmtFull(t.att) : 'Data unavailable',
+      x: perDay ? `${fmtShort(perDay)} arrivals a day` : '', cls: '' },
+    { k: 'left within 4 hours', v: l12perf != null ? l12perf.toFixed(1) + '%' : 'Data unavailable',
+      x: l12perf == null ? '' : l12perf >= 95 ? 'promise kept on average'
+        : l12perf < 75.1 ? 'below England average' : 'above England average',
       cls: l12perf == null ? '' : (l12perf >= 95 ? 'good' : l12perf < 60 ? 'hot' : '') },
-    { k: 'breached the four-hour promise', v: brTotal != null ? fmtFull(brTotal) : 'Data unavailable',
-      x: brShare != null ? `${brShare}% of visits with published waits` : '',
+    { k: 'waited longer than 4h', v: brTotal != null ? fmtFull(brTotal) : 'Data unavailable',
+      x: brShare != null ? `${brShare}% of visits breached` : '',
       cls: brShare != null && brShare >= 30 ? 'hot' : '' },
+    { k: 'waited on a trolley 12h+', v: t.dta != null ? fmtFull(t.dta) : 'Data unavailable',
+      x: t.dta ? 'no ward bed after decision to admit' : '', cls: '' },
     { k: 'emergency admissions', v: t.adm != null ? fmtFull(t.adm) : 'Data unavailable',
-      x: admShare != null ? `${admShare}% of arrivals ended up admitted` : '', cls: '' },
-    { k: 'trolley waits of 12 hours or more', v: t.dta != null ? fmtFull(t.dta) : 'Data unavailable',
-      x: t.dta ? 'no ward bed existed after the decision to admit' : '',
-      cls: t.dta >= 10000 ? 'hot' : '' },
-    { k: 'months meeting the 95% promise', v: `${t.met} of ${t.months}`,
-      x: t.met === 0 ? 'not once in the whole window' : '', cls: t.met ? 'good' : '' }
+      x: admShare != null ? `${admShare}% of arrivals admitted` : '', cls: '' },
+    { k: 'met the 95% promise', v: `${t.met} of ${t.months} months`,
+      x: t.met === 0 ? 'not once in the window' : '', cls: t.met ? 'good' : '' },
+    { k: 'busiest month on record', v: busyM ? fmtFull(busyM.att) : '—',
+      x: busyM ? mLabel(busyM.ym) : '', cls: '' }
   ];
+  if (rankInfo) tiles.push({ k: 'performance rank · England',
+    v: `#${rankInfo.pos} of ${rankInfo.total}`, x: `${rankInfo.quart} on four-hour waits`, cls: '' });
+  if (trendD != null) tiles.push({ k: 'vs previous 12 months',
+    v: `${trendD >= 0 ? '+' : ''}${trendD.toFixed(1)}pp`,
+    x: trendD >= 0 ? 'improving' : 'declining', cls: trendD >= 0 ? 'good' : 'hot' });
 
-  // the most recent single report
-  const lmPerf = row && row.cov && row.att ? Math.round(1000 * row.w4 / row.att) / 10 : null;
-  const lmMetrics = [
-    { k: 'people arrived', v: row ? fmtFull(row.att) : 'Data unavailable', x: '', cls: '' },
-    { k: 'left within 4 hours', v: lmPerf != null ? lmPerf.toFixed(1) + '%' : 'Data unavailable',
-      cls: lmPerf != null && lmPerf >= 95 ? 'good' : '' },
-    { k: 'waited longer than 4h', v: row && row.cov ? fmtFull(row.att - row.w4) : 'Data unavailable',
-      cls: row && row.cov ? 'hot' : '' },
-    { k: 'admitted to a ward', v: row && row.adm != null ? fmtFull(Math.round(row.adm * 1000)) : 'Data unavailable', x: '', cls: '' },
-    { k: 'waited on a trolley 12h+', v: row && row.dta != null ? fmtFull(Math.round(row.dta * 1000)) : 'Data unavailable',
-      cls: row && row.dta >= 500 ? 'hot' : '' }
-  ];
-  const mRow = mm => `<div class="tr-metric ${mm.cls}">
+  const tileRow = mm => `<div class="tr-stat ${mm.cls}">
     <span class="k">${mm.k}</span><span class="v num">${mm.v}</span>${mm.x ? `<span class="x">${mm.x}</span>` : ''}</div>`;
 
-  let recordsHtml = '';
-  if (bestM || worstM || busyM) {
-    recordsHtml = `<div class="tr-note" style="margin-top:10px">
-      ${bestM ? `Best month ever: <b class="num">${bestM.v.toFixed(1)}%</b> (${mLabel(bestM.ym)}). ` : ''}
-      ${worstM ? `Worst: <b class="num">${worstM.v.toFixed(1)}%</b> (${mLabel(worstM.ym)}). ` : ''}
-      ${busyM ? `Busiest: <b>${mLabel(busyM.ym)}</b> with <b class="num">${fmtFull(busyM.att)}</b> arrivals.` : ''}</div>`;
-  }
+  // the most recent month as a single line
+  const lmPerf = row && row.cov && row.att ? Math.round(1000 * row.w4 / row.att) / 10 : null;
+  const lmLine = row ? `<div class="tr-block"><h4>Latest month · ${mLabel(row.ym)}</h4>
+    <div class="tr-note"><b class="num">${fmtFull(row.att)}</b> people arrived ·
+    <b class="num">${lmPerf != null ? lmPerf.toFixed(1) + '%' : '—'}</b> left within 4 hours${row.dta != null ? ` · <b class="num">${fmtFull(Math.round(row.dta * 1000))}</b> waited on a trolley 12h+` : ''}.</div></div>` : '';
 
   // trend sparkline (monthly % within 4h)
   let sparkSvg = '', sparkNote = '';
@@ -379,27 +364,16 @@ function renderReport(code) {
   trBody.innerHTML = `
     <div class="tr-kicker">Trust report<span style="color:var(--dim)">·</span><span class="num">${code}</span></div>
     <div class="tr-name">${t.name}</div>
-    <div class="tr-badges">
-      <span class="tr-badge ${t.kind}">${kindName}</span>
-      <span class="tr-badge">${t.months} reporting months</span>
-      <span class="tr-badge">to ${mLabel(LAST_YM)}</span>
-    </div>
+    <div class="tr-window num">${kindName} · ${t.months} reporting months · to ${mLabel(LAST_YM)}</div>
 
-    <div class="tr-block" style="margin-top:14px"><h4>Rolling twelve months</h4>
-      <div class="tr-metrics">${l12Metrics.map(mRow).join('')}</div>
-      ${recordsHtml}
-    </div>
+    <div class="tr-statgrid">${tiles.map(tileRow).join('')}</div>
 
-    <div class="tr-block"><h4>The most recent report${row ? ' · ' + mLabel(row.ym) : ''}</h4>
-      <div class="tr-metrics">${lmMetrics.map(mRow).join('')}</div>
-    </div>
+    ${lmLine}
 
     ${sparkSvg ? `<div class="tr-block"><h4>The eleven-year slide at this trust</h4>${sparkSvg}${sparkNote}</div>` :
        `<div class="tr-unavailable">Monthly waiting-time history isn't available for this site in the cleaned dataset.</div>`}
 
     <div class="tr-block"><h4>Compared with England</h4>
-      ${rankHtml}
-      ${trendNote}
       <div class="tr-note">This trust: <b class="num">${l12perf != null ? l12perf.toFixed(1)+'%' : '—'}</b> within 4 hours
       over the last twelve months. England as a whole:
       <b class="num">75.1%</b>. ${l12perf != null ? (l12perf >= 75.1 ? 'So this trust performs <b>better than average</b>.' : 'So this trust performs <b>worse than average</b>.') : ''}</div></div>
