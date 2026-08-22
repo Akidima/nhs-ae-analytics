@@ -147,6 +147,84 @@ function regionStats(region) {
   return out;
 }
 
+/* regional aggregate for ONE reporting month — same denominators as the
+   trust's own monthly record (only trusts that published that month count) */
+const regionMonthCache = new Map();
+function regionMonthStats(region, ym) {
+  if (!region || !ym) return null;
+  const key = region + '@' + ym;
+  if (regionMonthCache.has(key)) return regionMonthCache.get(key);
+  let cov = 0, w4 = 0, n = 0;
+  TRUSTS.forEach(t => {
+    if (t.region !== region) return;
+    const r = recordAt(t.code, ym);
+    if (!r || !r.cov || !r.att) return;
+    cov += r.att; w4 += r.w4; n++;
+  });
+  const out = n ? { region, ym, n, cov, w4, perf: cov > 0 ? 100 * w4 / cov : null } : null;
+  regionMonthCache.set(key, out);
+  return out;
+}
+
+/* England's published national performance for one month (null when the
+   national row itself is sparse — never a stand-in value) */
+function englandMonthPerf(ym) {
+  const r = englandMonth(ym);
+  return r && r.pp != null && r.n >= 150 && r.pp <= 100 ? r.pp : null;
+}
+
+/* ---------- performance context: now / previous / England / region ----------
+   Both bases share one shape so the UI renders them identically:
+   month mode compares this calendar month with the trust's most recent
+   earlier published month; rolling mode compares the last 12 reported
+   months with the 12 before them. England values use the published
+   national series (pp), region values use real trust rows only.        */
+function contextFor(code, ym) {
+  const t = BY_CODE.get(code);
+  if (!t) return null;
+  const pct = r => Math.round(1000 * r.w4 / r.att) / 10;
+  if (ym && PERIODS.includes(ym)) {
+    const rec = recordAt(code, ym);
+    const idx = PERIODS.indexOf(ym);
+    let prev = null;
+    for (let i = idx - 1; i >= 0 && !prev; i--) {
+      const r = recordAt(code, PERIODS[i]);
+      if (r && r.cov && r.att) prev = r;
+    }
+    const prevYm = prev ? prev.ym : null;
+    const reg = t.region ? regionMonthStats(t.region, ym) : null;
+    const regPrev = prevYm && t.region ? regionMonthStats(t.region, prevYm) : null;
+    return {
+      basis: 'month', ym, prevYm,
+      perf: rec && rec.cov ? pct(rec) : null,
+      prev: prev && prev.cov ? pct(prev) : null,
+      eng: englandMonthPerf(ym),
+      engPrev: prevYm ? englandMonthPerf(prevYm) : null,
+      reg: reg ? reg.perf : null, regN: reg ? reg.n : 0,
+      regPrev: regPrev ? regPrev.perf : null,
+      counts: rec ? { att: rec.att, br: rec.br, adm: rec.adm, dta: rec.dta } : null,
+      prevCounts: prev ? { att: prev.att, br: prev.br, adm: prev.adm, dta: prev.dta } : null
+    };
+  }
+  const rows = (history(code) || []).filter(h => h.cov && h.att);
+  const avg = rs => rs.length ? 100 * rs.reduce((s, h) => s + h.w4, 0) /
+                               rs.reduce((s, h) => s + h.att, 0) : null;
+  let ac = 0, wc = 0, pac = 0, pwc = 0;
+  M.slice(-12).forEach(r => { ac += r.ac || 0; wc += r.wc || 0; });
+  M.slice(-24, -12).forEach(r => { pac += r.ac || 0; pwc += r.wc || 0; });
+  const reg = t.region ? regionStats(t.region) : null;
+  return {
+    basis: 'roll12',
+    perf: avg(rows.slice(-12)), prev: avg(rows.slice(-24, -12)),
+    eng: ac > 0 ? 100 * wc / ac : null, engPrev: pac > 0 ? 100 * pwc / pac : null,
+    reg: reg ? reg.perf : null, regN: reg ? reg.n : 0, regPrev: null,
+    counts: { att: t.att, br: t.br != null ? t.br :
+              (t.attCov != null ? Math.max(t.attCov - t.w4, 0) : null),
+              adm: t.adm, dta: t.dta },
+    prevCounts: null
+  };
+}
+
 /* ---------- deterministic insights ("What stands out?") ----------
    Every rule states its comparison basis and reporting period. Facts only:
    no causal claims, no invented benchmarks.                            */
@@ -288,7 +366,10 @@ function reportCsv(code) {
   return lines.map(l => Array.isArray(l) ? l.join(',') : l).join('\n');
 }
 
-/* ---------- map colouring by metric (buckets computed from real data) ---------- */
+/* ---------- map colouring by metric (buckets computed from real data) ----------
+   Annual metrics carry two bucket scales: last-12-months totals and single-
+   month totals, chosen by whether a reporting period is active. 'chg' is the
+   4-hour performance change versus the previous comparable period.          */
 const MAP_METRICS = {
   type: { label: 'Trust type', buckets: null },
   w4pct: { label: 'Left within 4 hours (%)', buckets: [
@@ -297,32 +378,91 @@ const MAP_METRICS = {
     { max: 80, color: 'var(--warm)', label: '70–79%' },
     { max: 95, color: 'var(--cool)', label: '80–94%' },
     { max: Infinity, color: 'var(--accent)', label: '95%+' }] },
+  chg: { label: 'Change vs previous period', buckets: [
+    { max: -5, color: '#be123c', label: 'fell 5pp+' },
+    { max: -1, color: 'rgba(251,113,133,.55)', label: 'fell 1–5pp' },
+    { max: 1, color: '#94a3b8', label: 'flat ±1pp' },
+    { max: 5, color: 'rgba(94,234,212,.55)', label: 'rose 1–5pp' },
+    { max: Infinity, color: 'var(--accent)', label: 'rose 5pp+' }] },
   dta: { label: 'Trolley waits 12h+', buckets: [
     { max: 0, color: '#334155', label: 'none published' },
-    { max: 1000, color: 'rgba(251,113,133,.35)', label: 'under 1,000' },
-    { max: 5000, color: 'rgba(251,113,133,.6)', label: '1–5K' },
-    { max: 15000, color: 'var(--hot)', label: '5–15K' },
-    { max: Infinity, color: '#be123c', label: 'over 15K' }] },
+    { max: 1000, color: 'rgba(251,113,133,.35)', label: 'under 1K / yr' },
+    { max: 5000, color: 'rgba(251,113,133,.6)', label: '1–5K / yr' },
+    { max: 15000, color: 'var(--hot)', label: '5–15K / yr' },
+    { max: Infinity, color: '#be123c', label: 'over 15K / yr' }],
+    bucketsM: [
+    { max: 0, color: '#334155', label: 'none published' },
+    { max: 250, color: 'rgba(251,113,133,.35)', label: 'under 250 / mo' },
+    { max: 1000, color: 'rgba(251,113,133,.6)', label: '250–1K / mo' },
+    { max: 3000, color: 'var(--hot)', label: '1–3K / mo' },
+    { max: Infinity, color: '#be123c', label: 'over 3K / mo' }] },
   att: { label: 'Total arrivals', buckets: [
-    { max: 50000, color: 'rgba(125,211,252,.45)', label: 'under 50K' },
-    { max: 150000, color: 'rgba(125,211,252,.7)', label: '50–150K' },
-    { max: 300000, color: 'var(--cool)', label: '150–300K' },
-    { max: 500000, color: 'var(--warm)', label: '300–500K' },
-    { max: Infinity, color: 'var(--accent)', label: 'over 500K' }] },
+    { max: 50000, color: 'rgba(125,211,252,.45)', label: 'under 50K / yr' },
+    { max: 150000, color: 'rgba(125,211,252,.7)', label: '50–150K / yr' },
+    { max: 300000, color: 'var(--cool)', label: '150–300K / yr' },
+    { max: 500000, color: 'var(--warm)', label: '300–500K / yr' },
+    { max: Infinity, color: 'var(--accent)', label: 'over 500K / yr' }],
+    bucketsM: [
+    { max: 20000, color: 'rgba(125,211,252,.45)', label: 'under 20K / mo' },
+    { max: 35000, color: 'rgba(125,211,252,.7)', label: '20–35K / mo' },
+    { max: 45000, color: 'var(--cool)', label: '35–45K / mo' },
+    { max: Infinity, color: 'var(--accent)', label: 'over 45K / mo' }] },
   adm: { label: 'Admissions', buckets: [
-    { max: 20000, color: 'rgba(167,139,250,.4)', label: 'under 20K' },
-    { max: 50000, color: 'rgba(167,139,250,.65)', label: '20–50K' },
-    { max: 90000, color: '#a78bfa', label: '50–90K' },
-    { max: Infinity, color: '#7c3aed', label: 'over 90K' }] }
+    { max: 20000, color: 'rgba(167,139,250,.4)', label: 'under 20K / yr' },
+    { max: 50000, color: 'rgba(167,139,250,.65)', label: '20–50K / yr' },
+    { max: 90000, color: '#a78bfa', label: '50–90K / yr' },
+    { max: Infinity, color: '#7c3aed', label: 'over 90K / yr' }],
+    bucketsM: [
+    { max: 4000, color: 'rgba(167,139,250,.4)', label: 'under 4K / mo' },
+    { max: 8000, color: 'rgba(167,139,250,.65)', label: '4–8K / mo' },
+    { max: 14000, color: '#a78bfa', label: '8–14K / mo' },
+    { max: Infinity, color: '#7c3aed', label: 'over 14K / mo' }] }
 };
-function mapMetricValue(metric, code) {
+
+/* 4-hour performance change vs the previous comparable period for one trust:
+   with a period → this published month vs its previous published month;
+   without → latest 12 reported months vs the 12 before them. */
+function mapMetricChange(code, ym) {
+  const rows = (history(code) || []).filter(h => h.cov && h.att);
+  if (!rows.length) return null;
+  const pctOf = r => 100 * r.w4 / r.att;
+  if (ym) {
+    let idx = -1;
+    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].ym === ym) { idx = i; break; }
+    if (idx <= 0) return null;
+    return pctOf(rows[idx]) - pctOf(rows[idx - 1]);
+  }
+  if (rows.length < 15) return null;
+  const avg = rs => rs.reduce((s, h) => s + h.w4, 0) / rs.reduce((s, h) => s + h.att, 0) * 100;
+  return avg(rows.slice(-12)) - avg(rows.slice(-24, -12));
+}
+
+function mapMetricValue(metric, code, ym) {
   const t = BY_CODE.get(code);
   if (!t) return null;
-  if (metric === 'w4pct') return t.attCov > 0 ? 100 * t.w4 / t.attCov : null;
-  if (metric === 'dta') return t.dta != null ? t.dta : 0;
-  if (metric === 'att') return t.att;
-  if (metric === 'adm') return t.adm != null ? t.adm : 0;
+  if (metric === 'chg') return mapMetricChange(code, ym || null);
+  const r = ym ? recordAt(code, ym) : null;
+  const m = ym && r && r.cov;                    // month basis only when published
+  switch (metric) {
+    case 'w4pct': return m ? 100 * r.w4 / r.att
+                           : t.attCov > 0 ? 100 * t.w4 / t.attCov : null;
+    case 'dta':   return m ? r.dta : t.dta != null ? t.dta : 0;
+    case 'att':   return m ? r.att : t.att;
+    case 'adm':   return m ? (r.adm != null ? r.adm : 0)
+                           : t.adm != null ? t.adm : 0;
+  }
   return null;
+}
+function mapMetricBuckets(metric, hasPeriod) {
+  const def = MAP_METRICS[metric];
+  return def && def.buckets ? (hasPeriod && def.bucketsM ? def.bucketsM : def.buckets) : null;
+}
+function mapMetricColor(metric, code, ym) {
+  const b = mapMetricBuckets(metric, !!ym);
+  if (!b) return null;
+  const v = mapMetricValue(metric, code, ym);
+  if (v == null) return '#475569';
+  return b.find(x => v <= x.max).color;
 }
 function mapMetricColor(metric, code) {
   const def = MAP_METRICS[metric];
@@ -376,10 +516,11 @@ function shortName(name) {
 window.AECORE = {
   TRUSTS, BY_CODE, GEO_BY_CODE, PERIODS, MONTHS: MN,
   history, recordAt, currentRecord,
-  england12m, englandMonth, regionOf, regionStats,
+  england12m, englandMonth, englandMonthPerf,
+  regionOf, regionStats, regionMonthStats, contextFor,
   insights, explainer, fmt, fmtShort, monthLabel,
   parseHash, buildHash, reportCsv,
-  MAP_METRICS, mapMetricValue, mapMetricColor, compareRows,
+  MAP_METRICS, mapMetricValue, mapMetricBuckets, mapMetricColor, mapMetricChange, compareRows,
   LAST_YM: TM[TM.length - 1] || (M.length ? M[M.length - 1].p : null)
 };
 })();

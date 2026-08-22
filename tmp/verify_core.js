@@ -86,7 +86,7 @@ check('CSV has monthly rows with no fabricated numbers', csv.split('\n').length 
 
 /* ---- 7. map metric encoding ---- */
 check('map colour buckets resolve for every metric/trust',
-  ['w4pct','dta','att','adm'].every(mk =>
+  ['w4pct','dta','att','adm','chg'].every(mk =>
     window.AE_PROVIDERS.every(p => {
       const col = C.mapMetricColor(mk, p[0]);
       return typeof col === 'string' && col.length > 0;
@@ -94,6 +94,39 @@ check('map colour buckets resolve for every metric/trust',
 check('missing waits ⇒ grey bucket not invented %',
   (() => { const t0 = window.AE_PROVIDERS.find(p => !p[6]);
     return !t0 || C.mapMetricValue('w4pct', t0[0]) == null; })());
+
+/* ---- 8. performance context (now / previous / England / region) ---- */
+const cxM = C.contextFor('RRK', '2026-07');
+check('month context: UHB Jul-2026 perf ≈71.0', Math.abs(cxM.perf - 71.0) < 0.06);
+check('month context prev = nearest earlier published month',
+  cxM.prevYm === '2026-06' && Math.abs(cxM.prev - 68.9) < 0.06);
+const engJul = C.englandMonthPerf('2026-07');
+check('England month context from published series (75.37)',
+  engJul != null && Math.abs(engJul - 75.37) < 0.01);
+const regJul = C.regionMonthStats('Midlands', '2026-07');
+const mrows = window.AE_PROVIDERS.filter(p => C.regionOf(p[0]) === 'Midlands')
+  .map(p => C.recordAt(p[0], '2026-07')).filter(r => r && r.cov && r.att);
+let mcov = 0, mw4 = 0;
+mrows.forEach(r => { mcov += r.att; mw4 += r.w4; });
+check('region-month aggregate matches independent recompute (' + mrows.length + ' trusts)',
+  regJul.n === mrows.length && Math.abs(regJul.perf - 100 * mw4 / mcov) < 1e-9);
+const cxR = C.contextFor('RRK', null);
+check('roll12 context has now/prev/england/region',
+  cxR.basis === 'roll12' && cxR.perf != null && cxR.prev != null &&
+  cxR.eng != null && cxR.reg != null);
+
+/* ---- 9. change-vs-previous map metric ---- */
+const julR = C.recordAt('RRK', '2026-07'), junRec = C.recordAt('RRK', '2026-06');
+const chgUHB = C.mapMetricChange('RRK', '2026-07');
+const expectedChg = 100 * (julR.w4 / julR.att - junRec.w4 / junRec.att);
+check('chg(Jul) = perf(Jul) − perf(Jun)', Math.abs(chgUHB - expectedChg) < 1e-9);
+check('chg before first published month ⇒ null (no invention)',
+  C.mapMetricChange('RRK', '2017-04') === null);
+check('period-aware buckets: month scale differs from annual scale',
+  C.mapMetricBuckets('dta', true)[2].max < C.mapMetricBuckets('dta', false)[2].max);
+check('month-basis map value for dta uses the monthly record',
+  C.mapMetricValue('dta', 'RRK', '2026-07') === 2000 &&
+  C.mapMetricValue('dta', 'RRK') === 22004);
 
 console.log(failures ? `\n${failures} FAILURES` : '\nALL CORE CHECKS PASSED');
 process.exit(failures ? 1 : 0);

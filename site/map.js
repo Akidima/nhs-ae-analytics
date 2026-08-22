@@ -201,9 +201,13 @@ const legendEl = document.getElementById('map-legend');
 function mapMetricLine(code) {
   if (mapMetric === 'type') return '';
   const def = C.MAP_METRICS[mapMetric];
-  const v = C.mapMetricValue(mapMetric, code);
-  if (mapMetric === 'w4pct') return v == null ? `${def.label}: waits not published` : `${def.label}: ${v.toFixed(1)}%`;
-  return `${def.label}: ${v == null ? 'not published' : C.fmt(v)}`;
+  const v = C.mapMetricValue(mapMetric, code, selPeriod);
+  const basis = selPeriod ? ` · ${C.monthLabel(selPeriod)}` : '';
+  if (mapMetric === 'w4pct') return v == null ? `${def.label}: waits not published`
+    : `${def.label}: ${v.toFixed(1)}%${basis}`;
+  if (mapMetric === 'chg') return v == null ? `${def.label}: no comparable earlier data`
+    : `${def.label}: ${v >= 0 ? '+' : ''}${v.toFixed(1)}pp${basis}`;
+  return `${def.label}: ${v == null ? 'not published' : C.fmt(v)}${basis}`;
 }
 
 function renderLegend() {
@@ -216,9 +220,13 @@ function renderLegend() {
       '<span class="ml-note">dot size = attendances, last 12 months</span>';
     return;
   }
+  const buckets = C.mapMetricBuckets(mapMetric, !!selPeriod);
+  const note = mapMetric === 'chg'
+    ? (selPeriod ? 'vs previous published month · grey = not comparable' : 'latest 12m vs previous 12m')
+    : (selPeriod ? `one month · ${C.monthLabel(selPeriod)}` : 'last 12 months');
   legendEl.innerHTML = `<span class="ml-title">${def.label}:</span>` +
-    def.buckets.map(b => `<span class="ml-item"><span class="ml-sw" style="background:${b.color}"></span>${b.label}</span>`).join('') +
-    '<span class="ml-note">grey = not published · dot size = attendances</span>';
+    buckets.map(b => `<span class="ml-item"><span class="ml-sw" style="background:${b.color}"></span>${b.label}</span>`).join('') +
+    `<span class="ml-note">${note} · dot size = attendance</span>`;
 }
 
 function applyMarkerStates() {
@@ -229,7 +237,7 @@ function applyMarkerStates() {
     const base = Math.min(11, t.kind === 'major' ? 4 + Math.sqrt(t.att) / 260 : 3);
     let color;
     if (mapMetric === 'type') color = t.kind === 'major' ? Cs.accent : Cs.cool;
-    else color = C.mapMetricColor(mapMetric, code) || '#475569';
+    else color = C.mapMetricColor(mapMetric, code, selPeriod) || '#475569';
     m.setStyle({
       radius: base + (isSel ? 4 : isHov ? 2.5 : 0),
       weight: isSel ? 3 : 1.2,
@@ -385,6 +393,7 @@ function renderReport(code) {
   if (!t || !g) return;
   const hist = C.history(code);
   const eng = C.england12m();
+  const ctx = C.contextFor(code, selPeriod);
 
   /* --- the one authoritative record for the selected period --- */
   const rec = C.currentRecord(code, selPeriod);        // exact month or latest covered
@@ -500,19 +509,26 @@ function renderReport(code) {
       x: trendD >= 0 ? 'improving' : 'declining', cls: trendD >= 0 ? 'good' : 'hot' });
   }
 
-  /* --- period selector: only months that actually exist in the dataset --- */
+  /* --- draggable reporting-period timeline ---
+     Right end of the slider = "latest". Dragging or arrowing anywhere else
+     pins that exact month; every component reads the same selPeriod.     */
   const periodsBar = (() => {
     if (!hist || !hist.length) return '';
+    const maxI = C.PERIODS.length - 1;
     const cur = selPeriod || C.LAST_YM;
-    const idx = C.PERIODS.indexOf(cur);
-    const hasPrev = idx > 0;
-    const hasNext = selPeriod != null;                 // "next" returns to latest
-    return `<div class="tr-period" role="group" aria-label="Change reporting period">
-      <button type="button" class="per-btn" id="per-prev" ${hasPrev ? '' : 'disabled'}
+    const idx = Math.max(0, C.PERIODS.indexOf(cur));
+    return `<div class="tr-period" role="group" aria-label="Reporting period timeline">
+      <button type="button" class="per-btn" id="per-prev"
         aria-label="Previous reporting period">←</button>
-      <span class="per-label num">${monthMode ? C.monthLabel(selPeriod) : 'Latest · ' + C.monthLabel(C.LAST_YM)}</span>
-      <button type="button" class="per-btn" id="per-next" ${hasNext ? '' : 'disabled'}
+      <div class="per-track">
+        <input type="range" class="per-range" id="per-range" min="0" max="${maxI}" value="${idx}" step="1"
+          aria-label="Drag to change reporting period, ${C.monthLabel(C.PERIODS[0])} to ${C.monthLabel(C.LAST_YM)}"
+          aria-valuetext="${monthMode ? C.monthLabel(selPeriod) : 'Latest · ' + C.monthLabel(C.LAST_YM)}" />
+        <div class="per-ends"><span>${C.PERIODS[0].slice(2, 4)}</span><span>${C.LAST_YM.slice(2, 4)}</span></div>
+      </div>
+      <button type="button" class="per-btn" id="per-next"
         aria-label="Next reporting period">→</button>
+      <span class="per-label num">${monthMode ? C.monthLabel(selPeriod) : 'Latest · ' + C.monthLabel(C.LAST_YM)}</span>
     </div>`;
   })();
 
@@ -555,6 +571,95 @@ function renderReport(code) {
         ${Math.max(...pts.map(p=>p.v)).toFixed(0)}% · worst ${Math.min(...pts.map(p=>p.v)).toFixed(0)}%</span>.</div>`;
     }
   }
+
+  /* --- performance context for the headline metric (same basis everywhere) --- */
+  const ctxLine = (() => {
+    if (!ctx || ctx.perf == null) return '';
+    const pp = (a, b) => a == null || b == null ? null : Math.round((a - b) * 100) / 100;
+    const dPrev = pp(ctx.perf, ctx.prev), dEng = pp(ctx.perf, ctx.eng), dReg = pp(ctx.perf, ctx.reg);
+    const seg = (label, val, delta, refLabel) => {
+      if (val == null) return `<span class="ctx-item"><span class="ctx-k">${label}</span><span class="nodata-inline">not published</span></span>`;
+      return `<span class="ctx-item"><span class="ctx-k">${label}</span><span class="num">${val.toFixed(1)}%</span>` +
+        (delta != null ? ` <span class="ctx-d ${delta >= 0 ? 'up' : 'down'} num">${delta >= 0 ? '+' : ''}${delta.toFixed(1)}pp</span>` : '') +
+        (refLabel ? `<span class="ctx-ref">${refLabel}</span>` : '') + '</span>';
+    };
+    const prevLbl = ctx.basis === 'month'
+      ? (ctx.prevYm ? 'vs ' + C.monthLabel(ctx.prevYm) : '')
+      : 'vs previous 12m';
+    return `<div class="tr-ctx" role="group" aria-label="Performance context">
+      ${seg('This period', ctx.perf)}
+      ${seg(prevLbl, ctx.prev)}
+      ${seg('England · published', ctx.eng, dEng)}
+      ${ctx.regN >= 3 ? seg('Region (' + ctx.regN + ' trusts)', ctx.reg, dReg) : ''}
+      ${dPrev != null && Math.abs(dPrev) >= 0.05
+        ? `<div class="tr-note">So 4-hour performance ${dPrev >= 0 ? 'improved' : 'declined'} by
+           <b class="num">${Math.abs(dPrev).toFixed(1)} percentage points</b> versus the previous
+           ${ctx.basis === 'month' ? 'published month' : '12 months'}.</div>`
+        : ''}
+    </div>`;
+  })();
+
+  /* --- data-quality status for the current view --- */
+  const dq = (() => {
+    if (monthMode) {
+      if (!rec) return { cls: 'warn', icon: '⚠', text: `no report published for this trust in ${C.monthLabel(selPeriod)}` };
+      if (!rec.cov) return { cls: 'warn', icon: '⚠', text: 'attendance counts only — waits not published this month' };
+      return { cls: 'ok', icon: '●', text: 'complete report' };
+    }
+    return t.months >= 12 ? { cls: 'ok', icon: '●', text: 'complete window' }
+      : { cls: 'warn', icon: '⚠', text: `${t.months} of 12 recent reporting periods available` };
+  })();
+  const dqPill = `<span class="dq ${dq.cls}" title="${dq.text}"><span aria-hidden="true">${dq.icon}</span> <span class="sr-only">Data status: </span>${dq.text}</span>`;
+
+  /* --- best & worst published periods — clickable shortcuts --- */
+  const bwChips = bestM && worstM && bestM.ym !== worstM.ym ? `
+    <div class="tr-bestworst">
+      <button type="button" class="bw-chip good" data-goto-ym="${bestM.ym}"
+        title="Open ${C.monthLabel(bestM.ym)}">▲ best · ${C.monthLabel(bestM.ym)} (${bestM.v.toFixed(1)}%)</button>
+      <button type="button" class="bw-chip hot" data-goto-ym="${worstM.ym}"
+        title="Open ${C.monthLabel(worstM.ym)}">▼ hardest · ${C.monthLabel(worstM.ym)} (${worstM.v.toFixed(1)}%)</button>
+    </div>` : '';
+
+  /* --- optional deeper exploration: month × month heatmap --- */
+  const heatmap = (() => {
+    if (!hist || hist.length < 24) return '';
+    const years = {};
+    hist.forEach(h => {
+      const y = h.ym.slice(0, 4);
+      (years[y] = years[y] || {})[h.ym.slice(5, 7)] = h;
+    });
+    const bucketCls = v => v >= 95 ? 'b95' : v >= 80 ? 'b80' : v >= 70 ? 'b70' : v >= 60 ? 'b60' : 'bx';
+    const rows = Object.keys(years).sort().map(y => {
+      let cells = '';
+      for (let mth = 1; mth <= 12; mth++) {
+        const k = String(mth).padStart(2, '0');
+        const h = years[y][k];
+        if (!h) { cells += '<div class="hm-cell none" role="presentation"></div>'; continue; }
+        if (!h.cov || !h.att) {
+          cells += `<div class="hm-cell miss" title="${C.monthLabel(h.ym)} — waits not published"></div>`;
+          continue;
+        }
+        const v = 100 * h.w4 / h.att;
+        const engV = C.englandMonthPerf(h.ym);
+        cells += `<button type="button" class="hm-cell ${bucketCls(v)}" data-goto-ym="${h.ym}"
+          title="${C.monthLabel(h.ym)}: ${v.toFixed(1)}% within 4h${engV != null ? ` (England ${engV.toFixed(1)}%)` : ''} — click to open"
+          aria-label="${C.monthLabel(h.ym)}: ${v.toFixed(1)} percent within four hours${engV != null ? `, England ${engV.toFixed(1)} percent` : ''}. Click to open this period."></button>`;
+      }
+      return `<div class="hm-row"><span class="hm-year num">${y}</span>${cells}</div>`;
+    }).join('');
+    return `<details class="about-data hm-wrap"><summary>Performance heatmap · every reported month</summary>
+      <div class="hm" role="grid" aria-label="Monthly four-hour performance heatmap; each cell is one month, click to open it">
+        ${rows}
+      </div>
+      <div class="hm-scale">
+        <span>hardest</span>
+        <span class="hm-cell bx"></span><span class="hm-cell b60"></span><span class="hm-cell b70"></span>
+        <span class="hm-cell b80"></span><span class="hm-cell b95"></span>
+        <span>&nbsp;95%+ promise met</span>
+        <span class="hm-cell miss"></span><span>= waits not published</span>
+        <span class="hm-cell none"></span><span>= no report that month</span>
+      </div></details>`;
+  })();
 
   /* front-door type split */
   let splitHtml = '';
@@ -635,6 +740,7 @@ function renderReport(code) {
         title="${cmpCodes.includes(code) ? 'Remove from comparison' : 'Pin for side-by-side comparison (2–4 trusts)'}">${cmpCodes.includes(code) ? '✓ comparing' : '+ compare'}</button></div>
     <div class="tr-name">${t.name}</div>
     <div class="tr-window num">${kindName}${t.region ? ' · ' + t.region : ''} · ${headLabel}</div>
+    ${dqPill}
 
     ${periodsBar}
     ${monthMode && (!rec || !rec.cov) ? `<div class="tr-unavailable">The NHS did not publish complete waiting-time
@@ -643,10 +749,14 @@ function renderReport(code) {
 
     <div class="tr-statgrid">${tiles.map(tile).join('')}</div>
 
+    ${ctxLine}
+
     ${buildJourney(t, rec)}
 
-    ${sparkSvg ? `<div class="tr-block"><h4>The eleven-year slide at this trust</h4>${sparkSvg}${sparkNote}</div>` :
+    ${sparkSvg ? `<div class="tr-block"><h4>The eleven-year slide at this trust</h4>${sparkSvg}${sparkNote}${bwChips}</div>` :
        `<div class="tr-unavailable">Monthly waiting-time history isn't available for this site in the cleaned dataset.</div>`}
+
+    ${heatmap}
 
     ${regionHtml}
 
@@ -677,6 +787,24 @@ function renderReport(code) {
   if (prevB) prevB.addEventListener('click', () => stepPeriod(-1));
   const nextB = document.getElementById('per-next');
   if (nextB) nextB.addEventListener('click', () => stepPeriod(+1));
+  const range = document.getElementById('per-range');
+  if (range) {
+    let raf = null;
+    range.addEventListener('input', () => {          // drag through history
+      if (raf) return;                               // one re-render per frame max
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        const v = +range.value;
+        interacted = true;
+        selPeriod = v === range.max ? null : C.PERIODS[v];   // right end = latest
+        syncHash();
+        renderReport(selected);
+      });
+    });
+    range.addEventListener('keydown', ev => ev.stopPropagation()); // arrows move the timeline, not the page
+  }
+  trBody.querySelectorAll('[data-goto-ym]').forEach(b =>
+    b.addEventListener('click', () => gotoPeriod(b.dataset.gotoYm)));
 
   wireExplainers(trBody);
 
@@ -737,6 +865,15 @@ function stepPeriod(dir) {
   const next = C.PERIODS[idx + dir];
   if (!next && !(dir > 0 && selPeriod)) return;
   selPeriod = dir > 0 ? (idx === C.PERIODS.length - 1 ? null : next) : next;
+  syncHash();
+  renderReport(selected);
+}
+
+/* open an exact reporting period (best/worst chips, heatmap cells) */
+function gotoPeriod(ym) {
+  if (!C.PERIODS.includes(ym)) return;
+  interacted = true;
+  selPeriod = ym === C.LAST_YM ? null : ym;
   syncHash();
   renderReport(selected);
 }

@@ -176,7 +176,14 @@ setTimeout(() => {
     check('insights section present', out.includes('What stands out?'));
     check('patient journey present', out.includes('The patient journey'));
     check('about-this-data present', out.includes('About this data'));
-    check('period selector present', out.includes('Change reporting period'));
+    check('period selector present', out.includes('Reporting period timeline'));
+    check('draggable timeline slider rendered', out.includes('per-range'));
+    check('performance context line present', out.includes('Performance context') && out.includes('England'));
+    check('data-quality pill present', out.includes('Data status') || out.includes('complete window'));
+    check('best/worst period chips present', out.includes('best ·') && out.includes('hardest ·'));
+    check('performance heatmap present with legend',
+      out.includes('Performance heatmap') && out.includes('waits not published'));
+    check('heatmap cells carry accessible labels', out.includes('aria-label="July 2026:'));
     check('compare affordance present', out.includes('+ compare'));
     // UHB's own numbers must come from its own history row (2026-07: 48,100 packed / 34,160 within 4h)
     check("UHB report shows UHB's July 2026 attendance", /48,100/.test(out));
