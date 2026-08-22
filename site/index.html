@@ -71,6 +71,7 @@ h3{font-family:var(--sans);font-weight:650;font-size:clamp(19px,2.4vw,24px);line
 #hero{min-height:calc(100svh - 52px);display:flex;flex-direction:column;justify-content:flex-end;
   position:relative;overflow:hidden}
 #hero-canvas{position:absolute;inset:0;z-index:0}
+#ecg-canvas{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.55}
 #hero .wrap{position:relative;z-index:2;padding-bottom:9vh;padding-top:16vh;width:100%}
 .hero-kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.26em;text-transform:uppercase;
   color:var(--accent);margin-bottom:26px;display:flex;align-items:center;gap:14px}
@@ -483,6 +484,7 @@ body{padding-top:52px}
 
 <!-- ══════════════════ HERO ══════════════════ -->
 <section id="hero" aria-label="Introduction">
+  <canvas id="ecg-canvas" aria-hidden="true"></canvas>
   <canvas id="hero-canvas" aria-hidden="true"></canvas>
   <div class="wrap">
     <p class="hero-kicker">NHS England · Accident &amp; Emergency · June 2015 – July 2026</p>
@@ -987,12 +989,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=9" defer></script>
-<script src="data/data.js?v=9" defer></script>
-<script src="app.js?v=9" defer></script>
-<script src="data/geo.js?v=9" defer></script>
-<script src="data/uk_geo.js?v=9" defer></script>
-<script src="data/trust_hist.js?v=9" defer></script>
-<script src="map.js?v=9" defer></script>
+<script src="vendor/leaflet.js?v=10" defer></script>
+<script src="data/data.js?v=10" defer></script>
+<script src="app.js?v=10" defer></script>
+<script src="data/geo.js?v=10" defer></script>
+<script src="data/uk_geo.js?v=10" defer></script>
+<script src="data/trust_hist.js?v=10" defer></script>
+<script src="map.js?v=10" defer></script>
 </body>
 </html>

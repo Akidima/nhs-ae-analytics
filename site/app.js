@@ -119,6 +119,66 @@ function hideTip() { tip.classList.remove('on'); }
   });
 })();
 
+/* ─────────────────────────── hero ECG heartbeat ─────────────────────────── */
+/* A calm electrocardiogram line drifting behind the particle field — the
+   visual shorthand for "a system's vital signs". One static frame under
+   prefers-reduced-motion; paused whenever the hero is off screen or the
+   tab is hidden. */
+(function heroEcg() {
+  const canvas = document.getElementById('ecg-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const rootStyle = getComputedStyle(document.documentElement);
+  let W = 0, H = 0, raf = null, last = null, phase = 0;
+  const PERIOD = 520;   // px between heartbeats
+  const SPEED = 130;    // drift, px per second
+  const g = (u, c, w, a) => a * Math.exp(-((u - c) ** 2) / (2 * w * w));
+  // P wave up, Q dip, tall R spike, S recovery, T wave — classic lead-II
+  const beat = u => -g(u, .14, .05, .18) + g(u, .295, .010, .10)
+                  - g(u, .325, .011, .85) + g(u, .352, .013, .24)
+                  - g(u, .52, .055, .20);
+  function size() {
+    const r = canvas.getBoundingClientRect();
+    W = canvas.width = r.width * devicePixelRatio;
+    H = canvas.height = r.height * devicePixelRatio;
+  }
+  function paint(ts) {
+    if (last != null) phase = (phase + Math.min(ts - last, 60) / 1000 * SPEED) % PERIOD;
+    last = ts;
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = (rootStyle.getPropertyValue('--accent') || '#5eead4').trim();
+    ctx.lineWidth = 1.6 * devicePixelRatio;
+    ctx.globalAlpha = .3;
+    ctx.beginPath();
+    const step = 4 * devicePixelRatio,
+          amp = H * .16 * devicePixelRatio,
+          base = H * .58 * devicePixelRatio;
+    for (let x = 0; x <= W + step; x += step) {
+      const u = (((x / devicePixelRatio + phase) / PERIOD) % 1 + 1) % 1;
+      const y = base + beat(u) * amp;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  function loop(ts) { paint(ts); raf = requestAnimationFrame(loop); }
+  function setRunning(on) {
+    if (on) {
+      size(); last = null;
+      if (REDUCED) { paint(0); stop(); }              // single static frame
+      else if (!raf) raf = requestAnimationFrame(loop);
+    } else stop();
+  }
+  function stop() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
+  setRunning(true);
+  window.addEventListener('resize', () => { if (!raf) size(); }, { passive: true });
+  new IntersectionObserver(es => es.forEach(e =>
+    setRunning(!document.hidden && e.isIntersecting)), { threshold: 0 }).observe(canvas);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else if (!REDUCED && !raf) { size(); last = null; raf = requestAnimationFrame(loop); }
+  });
+})();
+
 /* ─────────────────────────── count-up hero stats ─────────────────────────── */
 (function heroCounts() {
   const els = document.querySelectorAll('[data-count]');
