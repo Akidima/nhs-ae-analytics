@@ -179,7 +179,7 @@ P.forEach(p => {
     { className: 'ae-tip', direction: 'top', offset: [0, -6], sticky: false, opacity: 1 });
   m.on('mouseover', () => setHover(p[0]));
   m.on('mouseout', () => setHover(null));
-  m.on('click', () => { interacted = true; skipFly = p[0]; select(p[0]); skipFly = null; });
+  m.on('click', () => { interacted = true; select(p[0]); });
   m.addTo(map);
   markersByCode.set(p[0], m);
 });
@@ -391,24 +391,40 @@ function renderReport(code) {
     <div class="tr-note"><b class="num">${fmtFull(row.att)}</b> people arrived ·
     <b class="num">${lmPerf != null ? lmPerf.toFixed(1) + '%' : '—'}</b> left within 4 hours${row.dta != null ? ` · <b class="num">${fmtFull(Math.round(row.dta * 1000))}</b> waited on a trolley 12h+` : ''}.</div></div>` : '';
 
-  // trend sparkline (monthly % within 4h)
-  let sparkSvg = '', sparkNote = '';
+  // trend chart (monthly % within 4h) — every month is inspectable:
+  // hover or tap a point for that month's full credentials
+  let sparkSvg = '', sparkNote = '', sparkMeta = null;
   if (hist) {
-    const pts = hist.filter(h => h.cov).map(h => ({ ym: h.ym, v: 100 * h.w4 / h.att }))
-      .filter(p => isFinite(p.v));
+    const pts = hist.filter(h => h.cov).map(h => ({
+      ym: h.ym, v: 100 * h.w4 / h.att, att: h.att, br: h.att - h.w4,
+      adm: h.adm != null ? Math.round(h.adm * 1000) : null,
+      dta: h.dta != null ? Math.round(h.dta * 1000) : null
+    })).filter(p => isFinite(p.v));
     if (pts.length > 3) {
-      const W2 = 280, H2 = 74, pad = 4;
-      const xs = pts.map((_, i) => pad + i / (pts.length - 1) * (W2 - 2*pad));
-      const ys = pts.map(p => pad + (1 - (Math.min(Math.max(p.v, 40), 100) - 40) / 60) * (H2 - 2*pad));
-      const path = xs.map((x, i) => (i ? 'L' : 'M') + x.toFixed(1) + ',' + ys[i].toFixed(1)).join('');
-      sparkSvg = `<svg class="tr-spark" viewBox="0 0 ${W2} ${H2}" role="img"
-        aria-label="Monthly share seen within four hours, ${pts[0].ym} to ${pts[pts.length-1].ym}: started near ${pts[0].v.toFixed(0)} percent, now about ${pts[pts.length-1].v.toFixed(0)} percent">
-        <line x1="${pad}" x2="${W2-pad}" y1="${pad + (1-(95-40)/60)*(H2-2*pad)}" y2="${pad + (1-(95-40)/60)*(H2-2*pad)}" stroke="#fbbf24" stroke-dasharray="4 4" opacity=".8"/>
+      const W2 = 280, H2 = 96, padL = 6, padT = 6;
+      const ih = H2 - padT - 16;                       // room for year labels
+      const xs = i => padL + i / (pts.length - 1) * (W2 - 2 * padL);
+      const ys = p => padT + (1 - (Math.min(Math.max(p.v, 40), 100) - 40) / 60) * ih;
+      const path = pts.map((p, i) => (i ? 'L' : 'M') + xs(i).toFixed(1) + ',' + ys(p).toFixed(1)).join('');
+      const yLine = (padT + (1 - .9167) * ih).toFixed(1);
+      // January ticks give the eye a timeline
+      const years = pts.map((p, i) => ({ p, i }))
+        .filter(({ p }) => p.ym.endsWith('-01'))
+        .map(({ p, i }) => `<text x="${xs(i).toFixed(1)}" y="${H2 - 4}" font-size="8"
+          fill="#5c6a82" text-anchor="middle">${p.ym.slice(2, 4)}</text>`).join('');
+      sparkMeta = { pts };
+      sparkSvg = `<div class="tr-sparkwrap"><svg class="tr-spark" viewBox="0 0 ${W2} ${H2}" role="img"
+        aria-label="Monthly share seen within four hours, ${pts[0].ym} to ${pts[pts.length-1].ym}: started near ${pts[0].v.toFixed(0)} percent, now about ${pts[pts.length-1].v.toFixed(0)} percent. Touch or hover any point for that month's details.">
+        <line x1="${padL}" x2="${W2-padL}" y1="${yLine}" y2="${yLine}" stroke="#fbbf24" stroke-dasharray="4 4" opacity=".8"/>
         <path d="${path}" fill="none" stroke="#5eead4" stroke-width="2"/>
-        <circle cx="${xs[xs.length-1]}" cy="${ys[ys.length-1]}" r="3.4" fill="#5eead4"/></svg>`;
-      sparkNote = `<div class="tr-note">Each point is one month. The dashed line is the
-        95% promise. <span class="say">Best month ${Math.max(...pts.map(p=>p.v)).toFixed(0)}% ·
-        worst ${Math.min(...pts.map(p=>p.v)).toFixed(0)}%</span>.</div>`;
+        <circle cx="${xs(pts.length-1).toFixed(1)}" cy="${ys(pts[pts.length-1]).toFixed(1)}" r="3.4" fill="#5eead4"/>
+        <circle class="pt-hl" r="4" fill="#ffffff" stroke="#5eead4" stroke-width="2" opacity="0"/>
+        ${years}
+        ${pts.map((p, i) => `<circle class="tr-pt" data-i="${i}" cx="${xs(i).toFixed(1)}" cy="${ys(p).toFixed(1)}" r="7" fill="transparent"/>`).join('')}
+      </svg><div class="tr-tip" hidden></div></div>`;
+      sparkNote = `<div class="tr-note">Touch or hover any point to see that month's numbers.
+        The dashed line is the 95% promise. <span class="say">Best month
+        ${Math.max(...pts.map(p=>p.v)).toFixed(0)}% · worst ${Math.min(...pts.map(p=>p.v)).toFixed(0)}%</span>.</div>`;
     }
   }
 
@@ -466,11 +482,42 @@ function renderReport(code) {
   if (btn) btn.addEventListener('click', () => toggleCompare(code));
   const clear = document.getElementById('tr-cmp-clear');
   if (clear) clear.addEventListener('click', () => { cmpCodes = []; renderReport(selected); });
+
+  // per-month credentials on the eleven-year chart
+  const wrapEl = trBody.querySelector('.tr-sparkwrap');
+  if (wrapEl && sparkMeta) {
+    const tip = wrapEl.querySelector('.tr-tip');
+    const hl = wrapEl.querySelector('.pt-hl');
+    const { pts } = sparkMeta;
+    const show = c => {
+      const p = pts[+c.dataset.i];
+      hl.setAttribute('cx', c.getAttribute('cx'));
+      hl.setAttribute('cy', c.getAttribute('cy'));
+      hl.setAttribute('opacity', '1');
+      if (!tip) return;
+      tip.hidden = false;
+      tip.innerHTML =
+        `<div class="t-date">${mLabel(p.ym).toUpperCase()}</div>
+         <b class="num" style="font-size:15px">${p.v.toFixed(1)}%</b> seen within 4 hours<br>
+         <span class="num">${fmtFull(p.att)}</span> arrived ·
+         <span class="num">${fmtFull(p.br)}</span> waited longer than 4h` +
+        (p.dta != null ? `<br><span class="num">${fmtFull(p.dta)}</span> trolley waits 12h+` : '') +
+        (p.adm != null ? ` · <span class="num">${fmtFull(p.adm)}</span> admitted` : '');
+      const wr = wrapEl.getBoundingClientRect();
+      tip.style.left = Math.min(Math.max(
+        (+c.getAttribute('cx')) / 280 * wr.width - 60, 0), Math.max(wr.width - 130, 0)) + 'px';
+    };
+    const hideTip = () => { if (tip) tip.hidden = true; hl.setAttribute('opacity', '0'); };
+    wrapEl.querySelectorAll('.tr-pt').forEach(c => {
+      c.addEventListener('pointerenter', () => show(c));
+      c.addEventListener('pointerleave', hideTip);
+    });
+    wrapEl.addEventListener('pointerleave', hideTip);
+  }
   animatePanel();
 }
 
 /* ---------- wire the store ---------- */
-let skipFly = null;                 // marker clicks already centre themselves
 let lastSel = null;                 // work happens only when selection changes,
 
 on((sel, hov) => {
@@ -498,13 +545,11 @@ on((sel, hov) => {
   if (interacted && rep && rep.getBoundingClientRect().top > window.innerHeight * .55)
     rep.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'nearest' });
 
-  // camera follows selections made from the list / links (not marker clicks)
-  if (sel !== skipFly) {
-    const g = geoByCode.get(sel);
-    if (g && map.getZoom() < 6)     // only fly in when zoomed out; never fight the user's zoom
-      map.flyTo([g.lat, g.lon], Math.min(Math.max(map.getZoom(), 6), 7),
-        { duration: REDUCED ? 0 : .8 });
-  }
+  // every selection — marker, list or link — flies the camera to the
+  // trust's actual location and zooms in close enough to read it
+  const g = geoByCode.get(sel);
+  if (g) map.flyTo([g.lat, g.lon], Math.min(Math.max(map.getZoom(), 7.5), 9),
+    { duration: REDUCED ? 0 : .8 });
 });
 
 /* ---------- reset view ---------- */
