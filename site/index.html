@@ -113,6 +113,13 @@ html.light .site-head{background:rgba(255,255,255,.85)}
 #ticker:hover .track{animation-play-state:paused}
 @keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media (prefers-reduced-motion:reduce){#ticker .track{animation:none;flex-wrap:wrap;width:100%;gap:12px 40px;justify-content:center}}
+/* mobile: kill the always-on motion at the top of the page — it reads as
+   content endlessly rolling in and out on small screens */
+@media (max-width:720px){
+  .scroll-cue{display:none}                       /* touch users just swipe */
+  #ticker .track{animation:none;flex-wrap:wrap;width:100%;gap:10px 24px;justify-content:center}
+  #ecg-canvas{display:none}                       /* keep the hero still */
+}
 .tick-item{font-family:var(--mono);font-size:13px;color:var(--muted);white-space:nowrap;display:flex;gap:10px;align-items:center}
 .tick-item b{color:var(--ink);font-weight:600}
 .tick-item .sw{width:8px;height:8px;border-radius:50%;flex:none}
@@ -989,12 +996,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=10" defer></script>
-<script src="data/data.js?v=10" defer></script>
-<script src="app.js?v=10" defer></script>
-<script src="data/geo.js?v=10" defer></script>
-<script src="data/uk_geo.js?v=10" defer></script>
-<script src="data/trust_hist.js?v=10" defer></script>
-<script src="map.js?v=10" defer></script>
+<script src="vendor/leaflet.js?v=11" defer></script>
+<script src="data/data.js?v=11" defer></script>
+<script src="app.js?v=11" defer></script>
+<script src="data/geo.js?v=11" defer></script>
+<script src="data/uk_geo.js?v=11" defer></script>
+<script src="data/trust_hist.js?v=11" defer></script>
+<script src="map.js?v=11" defer></script>
 </body>
 </html>
