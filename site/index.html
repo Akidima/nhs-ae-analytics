@@ -13,6 +13,14 @@
 try{var t=localStorage.getItem('ae-theme');var sys=matchMedia('(prefers-color-scheme: light)').matches;
 if(t==='light'||(!t&&sys))document.documentElement.classList.add('light')
 else document.documentElement.classList.remove('light')}catch(e){}</script>
+<script>/* fresh visits/reloads start at the hero — before anything paints.
+   Trust hashes (#RRK) match no element id, so only real section anchors
+   keep their native jump; manual restoration stops the UA mid-page reset */
+try{history.scrollRestoration='manual';
+if(!document.getElementById(decodeURIComponent(location.hash.slice(1)))){
+var __sb=document.documentElement.style.scrollBehavior;
+document.documentElement.style.scrollBehavior='auto';scrollTo(0,0);
+document.documentElement.style.scrollBehavior=__sb||''}}catch(e){}</script>
 <style>
 :root{
   --bg:#07090e; --bg2:#0b0f17; --panel:#0d1220;
@@ -995,12 +1003,12 @@ body{padding-top:52px}
 <!-- data inlined no longer: see data/data.js -->
 <!-- app script moved to app.js -->
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
-<script src="vendor/leaflet.js?v=14" defer></script>
-<script src="data/data.js?v=14" defer></script>
-<script src="app.js?v=14" defer></script>
-<script src="data/geo.js?v=14" defer></script>
-<script src="data/uk_geo.js?v=14" defer></script>
-<script src="data/trust_hist.js?v=14" defer></script>
-<script src="map.js?v=14" defer></script>
+<script src="vendor/leaflet.js?v=15" defer></script>
+<script src="data/data.js?v=15" defer></script>
+<script src="app.js?v=15" defer></script>
+<script src="data/geo.js?v=15" defer></script>
+<script src="data/uk_geo.js?v=15" defer></script>
+<script src="data/trust_hist.js?v=15" defer></script>
+<script src="map.js?v=15" defer></script>
 </body>
 </html>

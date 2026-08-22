@@ -6,10 +6,17 @@
 'use strict';
 
 /* fresh visits and reloads start at the top; explicit #section anchors
-   still jump natively, and bfcache back/forward keeps its position */
+   still jump natively, and bfcache back/forward keeps its position.
+   scroll-behavior is forced to 'auto' so the reset is instant — a smooth
+   reset made every section visibly slide past on reload. */
 try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
 window.addEventListener('load', () => {
-  if (!document.getElementById(location.hash.slice(1))) window.scrollTo(0, 0);
+  if (!document.getElementById(location.hash.slice(1))) {
+    const html = document.documentElement, prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+    html.style.scrollBehavior = prev;
+  }
 });
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
