@@ -151,8 +151,8 @@ function hideTip() { tip.classList.remove('on'); }
     ctx.globalAlpha = .3;
     ctx.beginPath();
     const step = 4 * devicePixelRatio,
-          amp = H * .16 * devicePixelRatio,
-          base = H * .58 * devicePixelRatio;
+          amp = H * .16,                     // H is already device pixels
+          base = H * .55;
     for (let x = 0; x <= W + step; x += step) {
       const u = (((x / devicePixelRatio + phase) / PERIOD) % 1 + 1) % 1;
       const y = base + beat(u) * amp;
