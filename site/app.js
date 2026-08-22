@@ -1,0 +1,666 @@
+/* ═══════════════════════════════════════════════════════════════
+   Eleven Years in the Waiting Room — application script
+   All data from window.AE_MONTHLY / AE_PROVIDERS / AE_PM (real warehouse exports)
+   ═══════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const M = window.AE_MONTHLY, P = window.AE_PROVIDERS, PM = window.AE_PM;
+const NS = 'http://www.w3.org/2000/svg';
+const fmtM = n => n >= 1e6 ? (n/1e6).toFixed(n >= 1e7 ? 1 : 2) + 'M'
+              : n >= 1e3 ? Math.round(n/1e3) + 'K' : String(n);
+const fmtFull = n => n == null ? '—' : n.toLocaleString('en-GB');
+const monthName = ym => {
+  const [y, m] = ym.split('-').map(Number);
+  return ['January','February','March','April','May','June','July','August','September','October','November','December'][m-1] + ' ' + y;
+};
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const tip = document.getElementById('tip');
+function showTip(html, x, y) {
+  tip.innerHTML = html;
+  tip.classList.add('on');
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = x + 16, top = y - h - 12;
+  if (left + w > window.innerWidth - 12) left = x - w - 16;
+  if (top < 8) top = y + 18;
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+function hideTip() { tip.classList.remove('on'); }
+
+/* ─────────────────────────── hero particle field ─────────────────────────── */
+/* One particle per 20,000 real attendances, capped for frame budget.
+   Each dot drifts; the cursor gently repels them. Pure decoration —
+   hidden entirely under prefers-reduced-motion. */
+(function heroField() {
+  const canvas = document.getElementById('hero-canvas');
+  if (!canvas || REDUCED) { if (canvas) canvas.style.display = 'none'; return; }
+  const ctx = canvas.getContext('2d');
+  const TOTAL_ATT = 261761588, PER_DOT = 20000;
+  const rootStyle = getComputedStyle(document.documentElement);
+  let W, H, dots = [], raf = null, mouse = { x: -9e3, y: -9e3 };
+  const COUNT = Math.min(220, Math.round(TOTAL_ATT / PER_DOT / 59)); // ≈220 dots
+
+  function size() {
+    const r = canvas.getBoundingClientRect();
+    W = canvas.width = r.width * devicePixelRatio;
+    H = canvas.height = r.height * devicePixelRatio;
+  }
+  function seed() {
+    dots = [];
+    for (let i = 0; i < COUNT; i++) {
+      dots.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - .5) * .12 * devicePixelRatio,
+        vy: (Math.random() - .5) * .12 * devicePixelRatio,
+        r: (Math.random() * 1.3 + .5) * devicePixelRatio,
+        a: Math.random() * .5 + .15,
+        warm: Math.random() < .12
+      });
+    }
+  }
+  function step() {
+    ctx.clearRect(0, 0, W, H);
+    for (const d of dots) {
+      const dx = d.x - mouse.x, dy = d.y - mouse.y;
+      const dist2 = dx * dx + dy * dy, R = 130 * devicePixelRatio;
+      if (dist2 < R * R && dist2 > 1) {
+        const f = (R * R - dist2) / (R * R) * .35;
+        const dist = Math.sqrt(dist2);
+        d.vx += dx / dist * f * .4; d.vy += dy / dist * f * .4;
+      }
+      d.vx *= .96; d.vy *= .96;
+      d.vx += (Math.random() - .5) * .015; d.vy += (Math.random() - .5) * .015;
+      d.x += d.vx; d.y += d.vy;
+      if (d.x < -10) d.x = W + 10; if (d.x > W + 10) d.x = -10;
+      if (d.y < -10) d.y = H + 10; if (d.y > H + 10) d.y = -10;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, 7);
+      // colours track the --dot-rgb / --dotwarm-rgb tokens so the field
+      // recolours itself when the theme flips
+      ctx.fillStyle = d.warm
+        ? `rgba(${rootStyle.getPropertyValue('--dotwarm-rgb') || '251,191,36'},${d.a})`
+        : `rgba(${rootStyle.getPropertyValue('--dot-rgb') || '94,234,212'},${d.a})`;
+      ctx.fill();
+    }
+    raf = requestAnimationFrame(step);
+  }
+  size(); seed();
+  if (!REDUCED) raf = requestAnimationFrame(step);
+  window.addEventListener('resize', () => { if (!running) { size(); seed(); } }, { passive: true });
+  window.addEventListener('pointermove', e => {
+    const r = canvas.getBoundingClientRect();
+    if (e.clientY < r.bottom) {
+      document.body.classList.add('has-pointer');
+      mouse.x = (e.clientX - r.left) * devicePixelRatio;
+      mouse.y = (e.clientY - r.top) * devicePixelRatio;
+    } else mouse.x = mouse.y = -9e3;
+  }, { passive: true });
+
+  // pause the whole field while the hero is off screen or the tab is hidden —
+  // a decorative canvas has no business burning frames down the page
+  let running = false;
+  function setRunning(on) {
+    if (on === running) return;
+    running = on;
+    if (on) { size(); seed(); raf = requestAnimationFrame(step); }
+    else { cancelAnimationFrame(raf); raf = null; }
+  }
+  new IntersectionObserver(es => es.forEach(e => {
+    setRunning(!document.hidden && e.isIntersecting && !REDUCED);
+  }), { threshold: 0 }).observe(canvas);
+  document.addEventListener('visibilitychange', () => {
+    setRunning(!document.hidden && !REDUCED);
+  });
+})();
+
+/* ─────────────────────────── count-up hero stats ─────────────────────────── */
+(function heroCounts() {
+  const els = document.querySelectorAll('[data-count]');
+  const run = el => {
+    const target = +el.dataset.count, dur = REDUCED ? 0 : 1600;
+    const t0 = performance.now();
+    const short = target >= 1e6;
+    (function frame(t) {
+      const k = dur ? Math.min(1, (t - t0) / dur) : 1;
+      const eased = 1 - Math.pow(1 - k, 3);
+      const v = Math.round(target * eased);
+      el.textContent = short ? fmtM(v) : v.toLocaleString('en-GB');
+      if (k < 1) requestAnimationFrame(frame);
+    })(t0);
+  };
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { run(e.target); io.unobserve(e.target); }
+  }), { threshold: .4 });
+  els.forEach(el => io.observe(el));
+})();
+
+/* ─────────────────────────── reveal on scroll ─────────────────────────── */
+(function reveals() {
+  const els = document.querySelectorAll('.reveal');
+  if (REDUCED) { els.forEach(e => e.classList.add('in')); return; }
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { threshold: .12, rootMargin: '0px 0px -6% 0px' });
+  els.forEach(e => io.observe(e));
+})();
+
+/* ─────────────────────────── progress bar + ticker ─────────────────────────── */
+(function chrome() {
+  const bar = document.getElementById('progress');
+  // rAF-throttled: at most one style write per frame, instead of one per scroll event
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const h = document.documentElement;
+      bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+      ticking = false;
+    });
+  }, { passive: true });
+
+  const track = document.querySelector('#ticker .track');
+  const items = [
+    ['261.8M visits', 'var(--accent)'], ['65.3M emergency admissions', 'var(--cool)'],
+    ['43.7M 4-hour breaches since Apr 2017', 'var(--hot)'],
+    ['553,345 twelve-hour trolley waits, last 12m', 'var(--hot)'],
+    ['204 sites reported last year', 'var(--accent)'],
+    ['63 organisations renamed along the way', 'var(--dim)'],
+    ['46 arrivals every minute, day and night', 'var(--warm)'],
+    ['July 2015: the only month in eleven years to meet the 95% promise', 'var(--warm)']
+  ];
+  const html = items.map(([t, c]) =>
+    `<span class="tick-item"><span class="sw" style="background:${c}"></span>${t}</span>`).join('');
+  track.innerHTML = html + html;
+})();
+
+/* ─────────────────────────── light / dark theme ─────────────────────────── */
+/* One class on <html> flips every token. Pre-paint snippet in <head> applies
+   the saved/system choice before first paint; this wires the button, persists
+   the choice and broadcasts 'ae-theme' (the map listens to swap its tiles).  */
+(function theme() {
+  const btn = document.getElementById('theme-toggle');
+  const root = document.documentElement;
+  if (!btn) return;
+  const SUN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>';
+  const MOON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 14.1A8.8 8.8 0 0 1 9.9 3.4a8.8 8.8 0 1 0 10.7 10.7Z"/></svg>';
+  function paint() {
+    const light = root.classList.contains('light');
+    btn.innerHTML = light ? MOON : SUN;
+    const lbl = light ? 'Switch to dark theme' : 'Switch to light theme';
+    btn.setAttribute('aria-label', lbl);
+    btn.setAttribute('title', lbl);
+  }
+  window.__aeSetTheme = function (mode, persist = true) {
+    root.classList.toggle('light', mode === 'light');
+    if (persist) { try { localStorage.setItem('ae-theme', mode); } catch (e) {} }
+    paint();
+    window.dispatchEvent(new CustomEvent('ae-theme', { detail: mode }));
+  };
+  btn.addEventListener('click', () => {
+    window.__aeSetTheme(root.classList.contains('light') ? 'dark' : 'light');
+  });
+  // initial paint — runs after DOM ready so pre-paint class is present
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', paint, { once: true });
+  } else {
+    paint();
+  }
+})();
+
+/* ═══════════════════════════ CHART 1 · THE SLIDE ═══════════════════════════ */
+/* National monthly % within 4h. Series = attendance-weighted published
+   performance (NHS methodology), so pre-2017 months are real, not gaps.
+   Annotated at July 2015 (the one target month), June 2018, Nov 2022, today. */
+(function slideChart() {
+  const svg = document.getElementById('slide-chart');
+  if (!svg) return;
+  const W = 1000, H = 430, m = { t: 26, r: 24, b: 44, l: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const data = M.map((r, i) => ({ i, ym: r.p, perf: r.pp, n: r.n, breaches: r.b, w: r.wc, ac: r.ac }));
+  const x = i => m.l + i / (data.length - 1) * iw;
+  const y = v => m.t + (1 - (v - 60) / 40) * ih;   // domain 60–100
+
+  // grid + y labels
+  for (let v = 60; v <= 100; v += 10) {
+    svgEl('line', { class: 'gridline', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg);
+    svgEl('text', { class: 'axis', x: m.l - 10, y: y(v) + 4, 'text-anchor': 'end' }, svg)
+      .textContent = v + '%';
+  }
+  // x labels: January of each year
+  data.forEach(d => {
+    if (d.ym.endsWith('-01'))
+      svgEl('text', { class: 'axis', x: x(d.i), y: H - m.b + 22, 'text-anchor': 'middle' }, svg)
+        .textContent = d.ym.slice(0, 4);
+  });
+  // pandemic band
+  const iMar20 = data.findIndex(d => d.ym === '2020-03');
+  const iJan22 = data.findIndex(d => d.ym === '2022-01');
+  svgEl('rect', { class: 'era-band', x: x(iMar20), width: x(iJan22) - x(iMar20), y: m.t, height: ih }, svg);
+  svgEl('line', { class: 'era-line', x1: x(iMar20), x2: x(iMar20), y1: m.t, y2: m.t + ih }, svg);
+  svgEl('text', { class: 'anno', x: x(iMar20) + 8, y: m.t + 16 }, svg).textContent = 'pandemic arrives';
+
+  // 95% target
+  svgEl('line', { class: 'target-line', x1: m.l, x2: W - m.r, y1: y(95), y2: y(95) }, svg);
+  svgEl('text', { class: 'target-label', x: W - m.r - 4, y: y(95) - 7, 'text-anchor': 'end' }, svg)
+    .textContent = 'THE 95% PROMISE';
+
+  // the line, split into visible runs (nulls/sparse months = gaps)
+  const okPt = d => d.perf != null && d.perf <= 100 && d.n >= 150;
+  const runs = [];
+  let cur = [];
+  data.forEach(d => { if (okPt(d)) cur.push(d); else { if (cur.length) runs.push(cur); cur = []; } });
+  if (cur.length) runs.push(cur);
+
+  const linePath = run => run.map((d, j) => (j ? 'L' : 'M') + x(d.i).toFixed(1) + ',' + y(d.perf).toFixed(1)).join('');
+  const path = svgEl('path', {
+    d: runs.map(linePath).join(' '), fill: 'none', stroke: 'var(--accent)',
+    'stroke-width': 2.4, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+  }, svg);
+  if (!REDUCED) {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
+    new IntersectionObserver((es, io) => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      path.style.transition = 'stroke-dashoffset 2.6s cubic-bezier(.4,0,.2,1)';
+      path.style.strokeDashoffset = '0';
+      io.disconnect();
+    }), { threshold: .3 }).observe(svg);
+  }
+
+  // dots + hit areas
+  const g = svgEl('g', {}, svg);
+  data.forEach(d => {
+    if (!okPt(d)) return;
+    svgEl('circle', { cx: x(d.i), cy: y(d.perf), r: 2.6, fill: 'var(--accent)', opacity: .85 }, g);
+  });
+  data.forEach(d => {
+    if (!okPt(d)) return;
+    const hit = svgEl('rect', { x: x(d.i) - iw / data.length / 2, y: m.t, width: iw / data.length, height: ih, fill: 'transparent' }, svg);
+    const dot = document.createElementNS(NS, 'circle');
+    const brTxt = (d.breaches != null && d.ac > 0)
+      ? `<div style="color:var(--hot);font-size:12px;margin-top:3px">${Math.round(d.ac - d.w).toLocaleString('en-GB')} waited too long</div>` : '';
+    const html = `<div class="t-date">${monthName(d.ym).toUpperCase()}</div>
+      <div class="t-big num">${d.perf.toFixed(1)}%</div> seen within 4 hours${brTxt}`;
+    hit.addEventListener('pointerenter', ev => {
+      dot.setAttribute('r', 5.5); dot.setAttribute('fill', '#fff');
+      dot.setAttribute('cx', x(d.i)); dot.setAttribute('cy', y(d.perf));
+      g.appendChild(dot);
+      showTip(html, ev.clientX, ev.clientY);
+    });
+    hit.addEventListener('pointermove', ev => showTip(html, ev.clientX, ev.clientY));
+    hit.addEventListener('pointerleave', () => { hideTip(); if (dot.parentNode) dot.remove(); });
+  });
+
+  // annotations: the one target month, the 2018 high, the 2022 low, today
+  const iJul15 = data.findIndex(d => d.ym === '2015-07');
+  svgEl('circle', { cx: x(iJul15), cy: y(data[iJul15].perf), r: 4.5, fill: 'var(--warm)' }, svg);
+  svgEl('text', { class: 'anno-strong', x: x(iJul15) + 8, y: y(data[iJul15].perf) - 10, fill: 'var(--warm)' }, svg)
+    .textContent = '95.0% — the only month at target';
+  const iJun18 = data.findIndex(d => d.ym === '2018-06');
+  svgEl('circle', { cx: x(iJun18), cy: y(data[iJun18].perf), r: 4, fill: 'var(--accent)' }, svg);
+  svgEl('text', { class: 'anno-strong', x: Math.min(x(iJun18) + 6, W - m.r - 120), y: y(data[iJun18].perf) - 12 }, svg)
+    .textContent = '90.8% — June 2018';
+  const iNov22 = data.findIndex(d => d.ym === '2022-11');
+  svgEl('circle', { cx: x(iNov22), cy: y(data[iNov22].perf), r: 4, fill: 'var(--hot)' }, svg);
+  svgEl('text', { class: 'anno-strong', x: x(iNov22) - 6, y: y(data[iNov22].perf) + 20, 'text-anchor': 'middle', fill: 'var(--hot)' }, svg)
+    .textContent = '69.0% — the low, Nov 2022';
+  const iLast = data.length - 1;
+  svgEl('circle', { cx: x(iLast), cy: y(data[iLast].perf), r: 4.5, fill: 'var(--warm)' }, svg);
+  svgEl('text', { class: 'anno-strong', x: x(iLast) - 4, y: y(data[iLast].perf) - 12, 'text-anchor': 'end', fill: 'var(--warm)' }, svg)
+    .textContent = '75.4% — July 2026';
+})();
+
+/* ═══════════════════════════ CHART 2 · TWO WORLDS ═══════════════════════════ */
+/* Type-1 vs walk-in vs all, monthly, Apr 2017 → Jul 2026. */
+(function doorsChart() {
+  const svg = document.getElementById('doors-chart');
+  if (!svg) return;
+  const W = 1000, H = 380, m = { t: 24, r: 24, b: 42, l: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const from = M.findIndex(r => r.p === '2017-04');
+  const data = M.slice(from).map((r, j) => {
+    const cov = r.ac != null && r.ac > 0 && r.n >= 150;   // full-coverage months only
+    return {
+      i: j, ym: r.p, n: r.n,
+      all: cov ? 100 * r.wc / r.ac : null,
+      t1: (cov && r.x1 > 0 && r.y1 != null) ? 100 * (r.x1 - r.y1) / r.x1 : null,
+      t3: (cov && r.x3 > 0 && r.y3 != null) ? 100 * (r.x3 - r.y3) / r.x3 : null
+    };
+  });
+  const x = i => m.l + i / (data.length - 1) * iw;
+  const y = v => m.t + (1 - (v - 50) / 50) * ih;   // domain 50–100
+
+  for (let v = 50; v <= 100; v += 10) {
+    svgEl('line', { class: 'gridline', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg);
+    svgEl('text', { class: 'axis', x: m.l - 10, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = v + '%';
+  }
+  data.forEach(d => { if (d.ym.endsWith('-01'))
+    svgEl('text', { class: 'axis', x: x(d.i), y: H - m.b + 20, 'text-anchor': 'middle' }, svg).textContent = d.ym.slice(0, 4); });
+
+  svgEl('line', { class: 'target-line', x1: m.l, x2: W - m.r, y1: y(95), y2: y(95) }, svg);
+  svgEl('text', { class: 'target-label', x: m.l + 6, y: y(95) - 7 }, svg).textContent = '95% PROMISE';
+
+  const series = [
+    { key: 't3', color: 'var(--cool)', label: 'walk-in / urgent care' },
+    { key: 'all', color: 'var(--accent)', label: 'all A&E' },
+    { key: 't1', color: 'var(--hot)', label: 'consultant-led (Type 1)' }
+  ];
+  series.forEach(s => {
+    let dstr = '', pen = false;
+    data.forEach(d => {
+      if (d[s.key] == null) { pen = false; return; }
+      dstr += (pen ? 'L' : 'M') + x(d.i).toFixed(1) + ',' + y(d[s.key]).toFixed(1);
+      pen = true;
+    });
+    svgEl('path', { d: dstr, fill: 'none', stroke: s.color, 'stroke-width': 2.2,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: .95 }, svg);
+  });
+
+  // hover: vertical guide + all three values
+  const guide = svgEl('line', { x1: 0, x2: 0, y1: m.t, y2: m.t + ih, stroke: 'var(--line2)',
+    'stroke-width': 1, visibility: 'hidden' }, svg);
+  const hit = svgEl('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg);
+  hit.addEventListener('pointermove', ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(data.length - 1, Math.round((px - m.l) / iw * (data.length - 1))));
+    const d = data[i];
+    if (d.all == null) { hideTip(); guide.setAttribute('visibility', 'hidden'); return; }
+    guide.setAttribute('x1', x(i)); guide.setAttribute('x2', x(i));
+    guide.setAttribute('visibility', 'visible');
+    const row = (c, k, v) => `<div style="display:flex;gap:8px;align-items:center"><span style="width:9px;height:9px;border-radius:2px;background:${c}"></span>${k}&nbsp; <b class="num" style="margin-left:auto">${v}%</b></div>`;
+    showTip(`<div class="t-date">${monthName(d.ym).toUpperCase()}</div>` +
+      row('var(--hot)', 'Type 1 big A&E', d.t1.toFixed(1)) +
+      row('var(--cool)', 'Walk-in centres', d.t3.toFixed(1)) +
+      row('var(--accent)', 'All A&E', d.all.toFixed(1)), ev.clientX, ev.clientY);
+  });
+  hit.addEventListener('pointerleave', () => { guide.setAttribute('visibility', 'hidden'); hideTip(); });
+
+  // end labels (computed from the series itself)
+  const last = data[data.length - 1], first = data[0];
+  svgEl('text', { class: 'anno-strong', x: x(0) + 2, y: y(first.t1) - 10, 'text-anchor': 'start', fill: 'var(--hot)' }, svg)
+    .textContent = first.t1.toFixed(1) + '%';
+  svgEl('text', { class: 'anno-strong', x: x(data.length - 1) - 2, y: y(last.t1) + 20, 'text-anchor': 'end', fill: 'var(--hot)' }, svg)
+    .textContent = last.t1.toFixed(1) + '% today';
+  svgEl('text', { class: 'anno-strong', x: x(data.length - 1) - 2, y: y(last.t3) - 10, 'text-anchor': 'end', fill: 'var(--cool)' }, svg)
+    .textContent = last.t3.toFixed(1) + '% today';
+  svgEl('text', { class: 'anno-strong', x: x(data.length - 1) - 2, y: y(last.all) + 20, 'text-anchor': 'end', fill: 'var(--accent)' }, svg)
+    .textContent = last.all.toFixed(1) + '% today';
+})();
+
+/* ═══════════════════════════ CHART 3 · TROLLEY WAITS ═══════════════════════════ */
+(function trolleyChart() {
+  const svg = document.getElementById('trolley-chart');
+  if (!svg) return;
+  const W = 1000, H = 360, m = { t: 24, r: 20, b: 42, l: 56 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const data = M.filter(r => r.p >= '2017-01').map((r, j) => ({ j, ym: r.p, d: r.d, n: r.n }));
+  const maxV = 72000;
+  const x = j => m.l + j / (data.length - 1) * iw;
+  const y = v => m.t + (1 - v / maxV) * ih;
+  const bw = Math.max(2.5, iw / data.length * .68);
+
+  for (let v = 0; v <= maxV; v += 18000) {
+    svgEl('line', { class: 'gridline', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg);
+    svgEl('text', { class: 'axis', x: m.l - 10, y: y(v) + 4, 'text-anchor': 'end' }, svg)
+      .textContent = v === 0 ? '0' : (v / 1000) + 'K';
+  }
+  data.forEach(d => { if (d.ym.endsWith('-01') && d.ym.slice(3) === '01')
+    svgEl('text', { class: 'axis', x: x(d.j), y: H - m.b + 20, 'text-anchor': 'middle' }, svg).textContent = d.ym.slice(0, 4); });
+
+  // covid note band
+  const iMar20 = data.findIndex(d => d.ym === '2020-03');
+  svgEl('line', { class: 'era-line', x1: x(iMar20), x2: x(iMar20), y1: m.t, y2: m.t + ih }, svg);
+  svgEl('text', { class: 'anno', x: x(iMar20) + 6, y: m.t + 14 }, svg).textContent = 'pandemic begins';
+
+  const bars = [];
+  data.forEach(d => {
+    if (d.d == null) return;
+    const b = svgEl('rect', { x: x(d.j) - bw / 2, y: y(d.d), width: bw, height: m.t + ih - y(d.d),
+      rx: 1.5, fill: d.d > 40000 ? 'url(#trolley-hot)' : 'rgba(251,113,133,.55)' }, svg);
+    b.dataset.ym = d.ym; b.dataset.d = d.d;
+    bars.push(b);
+  });
+  const defs = svgEl('defs', {}, svg);
+  const grad = svgEl('linearGradient', { id: 'trolley-hot', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+  svgEl('stop', { offset: '0%', 'stop-color': '#fb7185' }, grad);
+  svgEl('stop', { offset: '100%', 'stop-color': '#be123c' }, grad);
+
+  // annotations: Jan21 vs Jan26
+  const jan21 = data.find(d => d.ym === '2021-01'), jan26 = data.find(d => d.ym === '2026-01');
+  svgEl('text', { class: 'anno-strong', x: x(data.indexOf(jan21)), y: y(jan21.d) - 8, 'text-anchor': 'middle' }, svg)
+    .textContent = '3,825';
+  svgEl('text', { class: 'anno-strong', x: x(data.indexOf(jan26)), y: y(jan26.d) - 8, 'text-anchor': 'middle', fill: 'var(--hot)' }, svg)
+    .textContent = '71,517';
+
+  bars.forEach(b => {
+    b.addEventListener('pointerenter', ev => {
+      b.setAttribute('opacity', '.85');
+      showTip(`<div class="t-date">${monthName(b.dataset.ym).toUpperCase()}</div>
+        <div class="t-big num" style="color:var(--hot)">+${(+b.dataset.d).toLocaleString('en-GB')}</div>
+        patients waited 12h+ for a ward bed after admission was decided`, ev.clientX, ev.clientY);
+    });
+    b.addEventListener('pointerleave', () => { b.setAttribute('opacity', '1'); hideTip(); });
+  });
+
+  if (!REDUCED) {
+    const finalBars = bars.map(b => ({ b, fy: b.getAttribute('y'), fh: b.getAttribute('height') }));
+    new IntersectionObserver((es, io) => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      finalBars.forEach(({ b, fy, fh }, k) => {
+        const delay = Math.min(k * 9, 900);
+        b.style.transition = `y .7s cubic-bezier(.22,.6,.2,1) ${delay}ms, height .7s cubic-bezier(.22,.6,.2,1) ${delay}ms`;
+        requestAnimationFrame(() => { b.setAttribute('y', fy); b.setAttribute('height', fh); });
+      });
+    }), { threshold: .25 }).observe(svg);
+  }
+})();
+
+/* ═══════════════════════════ CHART 4 · SEASONS ═══════════════════════════ */
+(function seasonChart() {
+  const svg = document.getElementById('season-chart');
+  if (!svg) return;
+  // Verified in Postgres over full-coverage months only.
+  const perf = [73.6, 74.0, 75.3, 77.8, 77.2, 77.7, 77.3, 78.9, 76.1, 76.6, 74.2, 74.3];
+  const idx  = [97, 92, 101, 94, 103, 102, 105, 100, 101, 104, 101, 100];
+  const MN = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const W = 640, H = 340, m = { t: 26, r: 46, b: 34, l: 40 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const x = i => m.l + (i + .5) / 12 * iw;
+  const yP = v => m.t + (1 - (v - 70) / 12) * ih;      // perf domain 70–82
+  const yI = v => m.t + (1 - (v - 85) / 25) * ih;      // index domain 85–110
+
+  for (let v = 70; v <= 82; v += 4) {
+    svgEl('line', { class: 'gridline', x1: m.l, x2: m.l + iw, y1: yP(v), y2: yP(v) }, svg);
+    svgEl('text', { class: 'axis', x: m.l - 8, y: yP(v) + 4, 'text-anchor': 'end' }, svg).textContent = v + '%';
+  }
+  svgEl('text', { class: 'axis', x: m.l + iw + 8, y: yI(100) + 4 }, svg).textContent = '100';
+  svgEl('text', { class: 'axis', x: m.l + iw + 8, y: yI(90) + 4 }, svg).textContent = '90';
+  MN.forEach((mm, i) => svgEl('text', { class: 'axis', x: x(i), y: H - m.b + 18, 'text-anchor': 'middle' }, svg).textContent = mm);
+
+  idx.forEach((v, i) => {
+    const bw = iw / 12 * .52;
+    svgEl('rect', { x: x(i) - bw / 2, y: yI(v), width: bw, height: m.t + ih - yI(v),
+      rx: 2.5, fill: 'rgba(125,211,252,.16)', stroke: 'rgba(125,211,252,.5)', 'stroke-width': 1 }, svg);
+  });
+  let dstr = '';
+  perf.forEach((v, i) => { dstr += (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + yP(v).toFixed(1); });
+  const path = svgEl('path', { d: dstr, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2.6,
+    'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  if (!REDUCED) {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len; path.style.strokeDashoffset = len;
+    new IntersectionObserver((es, io) => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      path.style.transition = 'stroke-dashoffset 1.8s ease-out';
+      path.style.strokeDashoffset = '0'; io.disconnect();
+    }), { threshold: .4 }).observe(svg);
+  }
+  perf.forEach((v, i) => {
+    const c = svgEl('circle', { cx: x(i), cy: yP(v), r: 3.4, fill: 'var(--accent)', class: 'season-dot' }, svg);
+    c.addEventListener('pointerenter', ev => {
+      c.setAttribute('r', 6);
+      showTip(`<div class="t-date">${['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'][i]}</div>
+        <div class="t-big num">${v}%</div> seen within 4h · busyness <b class="num">${idx[i]}</b> vs avg`,
+        ev.clientX, ev.clientY);
+    });
+    c.addEventListener('pointerleave', () => { c.setAttribute('r', 3.4); hideTip(); });
+  });
+  // highlight annotations
+  svgEl('text', { class: 'anno-strong', x: x(6), y: yI(105) - 8, 'text-anchor': 'middle', fill: 'var(--cool)' }, svg)
+    .textContent = 'busiest';
+  svgEl('text', { class: 'anno-strong', x: x(7), y: yP(78.9) - 12, 'text-anchor': 'middle', fill: 'var(--accent)' }, svg)
+    .textContent = 'best care';
+  svgEl('text', { class: 'anno-strong', x: x(0) + 14, y: yP(73.6) + 20, 'text-anchor': 'middle', fill: 'var(--hot)' }, svg)
+    .textContent = 'worst care';
+})();
+
+/* ═══════════════════════════ SECTION · EXPLORE ═══════════════════════════ */
+(function explorer() {
+  const svg = document.getElementById('scatter-chart');
+  if (!svg) return;
+  const W = 1000, H = 460, m = { t: 30, r: 26, b: 52, l: 60 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const state = { kind: 'all' };
+
+  const x = v => m.l + (Math.log10(Math.max(v, 300)) - Math.log10(300)) / (Math.log10(900000) - Math.log10(300)) * iw;
+  const y = v => m.t + (1 - (v - 30) / 70) * ih;
+
+  // static furniture
+  for (let v = 40; v <= 100; v += 20) {
+    svgEl('line', { class: 'gridline', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }, svg);
+    svgEl('text', { class: 'axis', x: m.l - 10, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = v + '%';
+  }
+  [1000, 10000, 100000].forEach(v => {
+    svgEl('line', { class: 'gridline', x1: x(v), x2: x(v), y1: m.t, y2: m.t + ih }, svg);
+    svgEl('text', { class: 'axis', x: x(v), y: H - m.b + 20, 'text-anchor': 'middle' }, svg)
+      .textContent = v >= 1000 ? (v/1000) + 'K' : v;
+  });
+  svgEl('text', { class: 'axis', x: m.l + iw / 2, y: H - 8, 'text-anchor': 'middle' }, svg)
+    .textContent = '← quieter sites        people attended (log scale)        busier sites →';
+  svgEl('text', { class: 'axis', x: m.l - 38, y: m.t + ih / 2, 'text-anchor': 'middle',
+    transform: `rotate(-90 ${m.l - 38} ${m.t + ih / 2})` }, svg).textContent = '% seen within 4 hours';
+  svgEl('line', { class: 'target-line', x1: m.l, x2: W - m.r, y1: y(95), y2: y(95) }, svg);
+  svgEl('text', { class: 'target-label', x: W - m.r - 6, y: y(95) - 7, 'text-anchor': 'end' }, svg)
+    .textContent = 'THE 95% PROMISE';
+
+  const gDots = svgEl('g', {}, svg);
+  const gLabels = svgEl('g', {}, svg);
+
+  function compute() {
+    // one row per provider, last 12 calendar months (pre-aggregated in AE_PROVIDERS)
+    const rows = [];
+    for (const p of P) {
+      if (state.kind !== 'all' && p[2] !== state.kind) continue;
+      rows.push({
+        code: p[0], name: p[1], kind: p[2],
+        att: p[3], perf: p[6] > 0 ? 100 * p[7] / p[6] : null, met: p[12], months: p[11]
+      });
+    }
+    return rows;
+  }
+
+  function render() {
+    gDots.innerHTML = ''; gLabels.innerHTML = '';
+    const rows = compute();
+    let totAtt = 0, met = 0, n = rows.length;
+    rows.forEach(d => {
+      totAtt += d.att; met += d.met;
+      const r = d.kind === 'major' ? 4 + Math.sqrt(d.att) / 26 : 3 + Math.sqrt(d.att) / 34;
+      const c = svgEl('circle', {
+        cx: x(d.att), cy: d.perf == null ? m.t + ih * .5 : y(d.perf),
+        r, fill: d.kind === 'major' ? 'var(--accent)' : 'var(--cool)',
+        'fill-opacity': .55, stroke: d.kind === 'major' ? 'var(--accent)' : 'var(--cool)',
+        'stroke-opacity': .9, 'stroke-width': 1, tabindex: '0',
+        role: 'img', 'aria-label': `${d.name}: ${d.att.toLocaleString('en-GB')} attendances` +
+          (d.perf == null ? '' : `, ${d.perf.toFixed(1)} percent within four hours`)
+      }, gDots);
+      c._d = d;
+      const act = ev => {
+        showTip(`<div class="t-date" style="color:${d.kind === 'major' ? 'var(--accent)' : 'var(--cool)'}">
+            ${d.kind === 'major' ? 'BIG A&E HOSPITAL' : 'WALK-IN CENTRE'}</div>
+          <div style="font-weight:650;line-height:1.3;margin-bottom:5px">${d.name}</div>
+          <b class="num">${fmtFull(d.att)}</b> attended over the last 12 months<br>
+          ${d.perf == null ? 'waits not published this period'
+            : `<b class="num" style="font-size:16px">${d.perf.toFixed(1)}%</b> seen within 4 hours · met the 95% promise in <b class="num">${d.met}/${d.months}</b> months`}
+          <div style="color:var(--dim);font-size:11px;margin-top:5px">code ${d.code}</div>`, ev.clientX, ev.clientY);
+      };
+      c.addEventListener('pointerenter', act);
+      c.addEventListener('focus', act);
+      c.addEventListener('pointerleave', hideTip);
+      c.addEventListener('blur', hideTip);
+    });
+    // label the extremes (only when showing everyone)
+    if (state.kind === 'all') {
+      const sorted = [...rows].sort((a, b) => b.att - a.att);
+      const busiest = sorted[0];
+      const withPerf = rows.filter(r => r.perf != null);
+      const best = [...withPerf].sort((a, b) => b.perf - a.perf)[0];
+      const worst = [...withPerf].sort((a, b) => a.perf - b.perf)[0];
+      [[busiest, 'busiest', 'middle', -12], [best, 'best in England', 'start', -12],
+       [worst, 'toughest in England', 'end', 16]].forEach(([d, tag, anchor, dy]) => {
+        if (!d) return;
+        const t = svgEl('text', {
+          x: x(d.att), y: y(d.perf == null ? 65 : d.perf) + dy, 'text-anchor': anchor, class: 'anno-strong'
+        }, gLabels);
+        t.textContent = tag;
+      });
+    }
+    document.getElementById('ex-count').textContent =
+      `Showing ${n} site${n === 1 ? '' : 's'} · ${fmtFull(totAtt)} attendances in view · ${fmtFull(met)} site-months met the 95% promise`;
+    document.getElementById('ex-summary').innerHTML =
+      `Right now you're looking at <b>${n} site${n === 1 ? '' : 's'}</b> over <b>the last 12 months</b>` +
+      (state.kind === 'major' ? ' — <b>big A&amp;E hospitals only</b>. Notice how few sit above the gold line.' :
+       state.kind === 'walkin' ? ' — <b>walk-in centres only</b>. Almost everything floats above the gold line.' :
+       '. Most big hospitals (larger dots) sit <b>below the gold line</b>; walk-in centres (small dots) float above it.') +
+      ` <span style="color:var(--dim)">Each dot is one site's whole recent year — hover for its story.</span>`;
+  }
+
+  document.querySelectorAll('.seg button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      state.kind = btn.dataset.kind;
+      render();
+    });
+  });
+  render();
+})();
+
+/* ═══════════════════════════ doors tab-cards ═══════════════════════════ */
+(function doorTabs() {
+  const details = {
+    major: `<b>Type 1 departments carry almost two-thirds of all demand — and nearly all of the waiting problem.</b>
+      In the last twelve months, only about <b class="num">61% of Type&nbsp;1 arrivals</b> met the 4-hour standard,
+      while walk-in centres managed <b class="num">96.9%</b>.
+      <span class="say">This may suggest the queue isn't really about minor injuries — it's concentrated at the big hospital front doors.</span>`,
+    walkin: `<b>Walk-in and urgent-care centres are the quiet success story.</b> They handled
+      <b class="num">88.6 million visits</b> over eleven years — a third of all demand — and in the last twelve months
+      kept <b class="num">96.9%</b> within four hours. <span class="say">This may suggest that when care is walk-in by
+      design, with no bed bottleneck behind it, the 4-hour promise survives.</span>`,
+    other: `<b>Type 2 — single-speciality units like eye casualty — are a rounding error:</b> just
+      <b class="num">2.2%</b> of all visits. They exist in the data, but they don't move the national story.
+      <span class="say">The real contest is between Type 1 hospitals and Type 3 walk-in centres.</span>`
+  };
+  const box = document.getElementById('door-detail');
+  document.querySelectorAll('.door').forEach(d => {
+    d.addEventListener('click', () => {
+      document.querySelectorAll('.door').forEach(x => { x.classList.remove('sel'); x.setAttribute('aria-selected', 'false'); });
+      d.classList.add('sel'); d.setAttribute('aria-selected', 'true');
+      box.style.opacity = 0;
+      setTimeout(() => { box.innerHTML = details[d.dataset.door]; box.style.opacity = 1; }, REDUCED ? 0 : 160);
+    });
+  });
+})();
+
+})();
+

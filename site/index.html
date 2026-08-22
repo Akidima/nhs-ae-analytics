@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="An interactive, plain-English story of 11 years of NHS A&E data — 261.8 million attendances, the 4-hour wait, and the trolley waits nobody talks about.">
+<link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin>
+<link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossorigin>
+<link rel="preload" as="style" href="vendor/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<title>Eleven Years in the Waiting Room — the NHS A&E story in data</title>
+<script>/* apply saved/system theme before first paint */
+try{var t=localStorage.getItem('ae-theme');var sys=matchMedia('(prefers-color-scheme: light)').matches;
+if(t==='light'||(!t&&sys))document.documentElement.classList.add('light')
+else document.documentElement.classList.remove('light')}catch(e){}</script>
+<style>
+:root{
+  --bg:#07090e; --bg2:#0b0f17; --panel:#0d1220;
+  --ink:#e8edf6; --muted:#9aa7bd; --dim:#5c6a82;
+  --line:rgba(148,163,184,.14); --line2:rgba(148,163,184,.28);
+  --accent:#5eead4; --warm:#fbbf24; --hot:#fb7185; --cool:#7dd3fc;
+  --wash:7,9,14; --panel-wash:13,18,32; --mapbg:#0b1322;
+  --dot-rgb:94,234,212; --dotwarm-rgb:251,191,36;
+  --serif:Georgia,'Times New Roman',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+html.light{
+  --bg:#f2f5f7; --bg2:#e9edf1; --panel:#ffffff;
+  --ink:#16202e; --muted:#49596e; --dim:#6b7a90;
+  --line:rgba(22,32,46,.15); --line2:rgba(22,32,46,.32);
+  --accent:#0f766e; --warm:#b45309; --hot:#be123c; --cool:#0369a1;
+  --wash:255,255,255; --panel-wash:255,255,255; --mapbg:#dde4e4;
+  --dot-rgb:13,148,136; --dotwarm-rgb:180,83,9;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.65;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:rgba(94,234,212,.25)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+.wrap-narrow{max-width:760px;margin:0 auto;padding:0 24px}
+section{position:relative}
+.sect-label{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--accent);display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.sect-label::after{content:'';flex:1;height:1px;background:var(--line)}
+h2{font-family:var(--serif);font-weight:400;font-size:clamp(30px,4.6vw,46px);line-height:1.12;
+  letter-spacing:-.01em;margin-bottom:14px;text-wrap:balance}
+h3{font-family:var(--sans);font-weight:650;font-size:clamp(19px,2.4vw,24px);line-height:1.3;
+  margin:0 0 8px;text-wrap:balance}
+.lede{color:var(--muted);font-size:clamp(16px,2vw,19px);max-width:640px;margin-bottom:8px}
+.fact-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+  color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:20px}
+.fact-tag .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+.note{color:var(--muted);font-size:14.5px;max-width:620px}
+.note strong{color:var(--ink);font-weight:600}
+.note .say{color:var(--ink);font-style:italic}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- reveal on scroll ---------- */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.22,.6,.2,1),transform .8s cubic-bezier(.22,.6,.2,1)}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+/* ---------- hero ---------- */
+#hero{min-height:calc(100svh - 52px);display:flex;flex-direction:column;justify-content:flex-end;
+  position:relative;overflow:hidden}
+#hero-canvas{position:absolute;inset:0;z-index:0}
+#hero .wrap{position:relative;z-index:2;padding-bottom:9vh;padding-top:16vh;width:100%}
+.hero-kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:26px;display:flex;align-items:center;gap:14px}
+.hero-kicker::before{content:'';width:34px;height:1px;background:var(--accent)}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(44px,8.2vw,96px);line-height:1.02;
+  letter-spacing:-.02em;max-width:12ch;text-wrap:balance;margin-bottom:26px}
+h1 em{font-style:italic;color:var(--accent)}
+.hero-sub{color:var(--muted);font-size:clamp(16px,2.2vw,20px);max-width:560px;margin-bottom:40px}
+.hero-sub strong{color:var(--ink);font-weight:600}
+.hero-stats{display:flex;gap:clamp(24px,5vw,64px);flex-wrap:wrap;border-top:1px solid var(--line);
+  padding-top:26px;margin-top:8px}
+.hstat .v{font-family:var(--serif);font-size:clamp(26px,3.6vw,40px);line-height:1.1;color:var(--ink)}
+.hstat .v .u{font-size:.5em;color:var(--dim)}
+.hstat .k{font-size:12.5px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin-top:6px}
+.scroll-cue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);z-index:2;
+  font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);
+  display:flex;flex-direction:column;align-items:center;gap:10px;text-decoration:none}
+.scroll-cue .line{width:1px;height:44px;background:linear-gradient(var(--accent),transparent);
+  animation:cue 2.2s ease-in-out infinite}
+@keyframes cue{0%,100%{opacity:.25;transform:scaleY(.55)}50%{opacity:1;transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.scroll-cue .line{animation:none}}
+
+/* light-theme component adjustments */
+html.light #hero-canvas{opacity:.9}
+html.light .map-stage,html.light #ukmap{background:var(--mapbg)}
+html.light .leaflet-control-zoom a{color:var(--ink)!important;border-color:var(--line2)!important}
+html.light .seg button[aria-pressed="true"]{color:#ffffff}
+html.light #tip,html.light .leaflet-tooltip.ae-tip{box-shadow:0 10px 30px rgba(22,32,46,.25)}
+html.light .site-head{background:rgba(255,255,255,.85)}
+
+/* ---------- ticker ---------- */
+#ticker{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:var(--bg2);overflow:hidden;padding:13px 0}
+#ticker .track{display:flex;gap:64px;width:max-content;animation:tick 46s linear infinite}
+#ticker:hover .track{animation-play-state:paused}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){#ticker .track{animation:none;flex-wrap:wrap;width:100%;gap:12px 40px;justify-content:center}}
+.tick-item{font-family:var(--mono);font-size:13px;color:var(--muted);white-space:nowrap;display:flex;gap:10px;align-items:center}
+.tick-item b{color:var(--ink);font-weight:600}
+.tick-item .sw{width:8px;height:8px;border-radius:50%;flex:none}
+
+/* ---------- section spacing ---------- */
+.sect{padding:clamp(90px,14vh,150px) 0}
+.sect-alt{background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 12%,var(--bg2) 88%,var(--bg) 100%)}
+
+/* ---------- what is this (definition cards) ---------- */
+.defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:44px}
+.def{border:1px solid var(--line);border-radius:14px;padding:24px 22px;background:rgba(var(--panel-wash),.6);
+  transition:border-color .3s,transform .3s}
+.def:hover{border-color:var(--line2);transform:translateY(-3px)}
+.def .glyph{font-family:var(--serif);font-size:30px;line-height:1;margin-bottom:14px;display:block}
+.def h4{font-size:16.5px;font-weight:650;margin-bottom:7px}
+.def p{font-size:14px;color:var(--muted);line-height:1.55}
+.def .ex{display:block;margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+
+/* ---------- anatomy record ---------- */
+.record{margin-top:48px;border:1px solid var(--line);border-radius:16px;background:var(--panel);
+  padding:clamp(20px,3.5vw,36px)}
+.record-head{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline;justify-content:space-between;
+  border-bottom:1px dashed var(--line2);padding-bottom:18px;margin-bottom:20px}
+.record-head .who{font-family:var(--serif);font-size:clamp(19px,2.6vw,25px)}
+.record-head .when{font-family:var(--mono);font-size:13px;color:var(--dim);letter-spacing:.1em}
+.rec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.rec-cell{border:1px solid var(--line);border-radius:12px;padding:16px 15px;background:rgba(var(--wash),.5);
+  position:relative}
+.rec-cell .rv{font-family:var(--serif);font-size:clamp(21px,2.6vw,28px);line-height:1.1}
+.rec-cell .rk{font-size:12px;color:var(--dim);font-family:var(--mono);letter-spacing:.06em;
+  text-transform:uppercase;margin-top:6px;line-height:1.45}
+.rec-cell.hl{border-color:rgba(94,234,212,.4)}
+.rec-cell.hl .rv{color:var(--accent)}
+.rec-cell.bad .rv{color:var(--hot)}
+.rec-note{margin-top:18px;font-size:14px;color:var(--muted)}
+.rec-note .say{color:var(--ink)}
+
+/* ---------- chart frames ---------- */
+.viz{margin-top:44px;border:1px solid var(--line);border-radius:16px;background:var(--panel);
+  padding:clamp(18px,3vw,30px);position:relative;overflow:hidden}
+.viz-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px}
+.viz-title{font-size:16.5px;font-weight:650}
+.viz-sub{font-size:13.5px;color:var(--muted);margin-top:3px;max-width:560px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+.legend .li{display:flex;align-items:center;gap:7px}
+.legend .sw{width:14px;height:3px;border-radius:2px}
+.chart-wrap{position:relative;margin-top:14px}
+.chart-wrap svg{display:block;width:100%;height:auto}
+.chart-note{margin-top:14px;font-size:14px;color:var(--muted);max-width:640px}
+.chart-note .say{color:var(--ink)}
+.callout{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:8px 14px;border-radius:999px;
+  border:1px solid rgba(94,234,212,.35);color:var(--accent);font-family:var(--mono);font-size:12.5px;
+  letter-spacing:.04em;background:rgba(94,234,212,.07)}
+.callout.warn{border-color:rgba(251,191,36,.4);color:var(--warm);background:rgba(251,191,36,.06)}
+.callout.hot{border-color:rgba(251,113,133,.4);color:var(--hot);background:rgba(251,113,133,.06)}
+
+/* axis + series text */
+.axis{font-family:var(--mono);font-size:11px;fill:var(--dim)}
+.gridline{stroke:rgba(148,163,184,.1);stroke-width:1}
+.target-line{stroke:var(--warm);stroke-width:1.5;stroke-dasharray:5 5;opacity:.85}
+.target-label{font-family:var(--mono);font-size:11px;fill:var(--warm);letter-spacing:.08em}
+.anno{font-family:var(--mono);font-size:11.5px;fill:var(--muted);letter-spacing:.03em}
+.anno-strong{font-family:var(--mono);font-size:11.5px;fill:var(--ink);font-weight:600}
+.era-band{fill:rgba(125,211,252,.045)}
+.era-line{stroke:rgba(125,211,252,.35);stroke-width:1;stroke-dasharray:2 4}
+
+/* tooltip */
+#tip{position:fixed;z-index:90;pointer-events:none;background:#111827;border:1px solid var(--line2);
+  border-radius:10px;padding:10px 13px;font-size:13px;color:var(--ink);max-width:250px;
+  box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;transition:opacity .15s;line-height:1.5}
+#tip.on{opacity:1}
+#tip .t-date{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em;margin-bottom:4px}
+#tip .t-big{font-family:var(--serif);font-size:19px}
+
+/* ---------- doors (type mix) ---------- */
+.doors{display:flex;gap:14px;margin-top:34px;align-items:flex-end;flex-wrap:wrap}
+.door{flex:1;min-width:170px;border:1px solid var(--line);border-radius:14px;padding:22px 20px 18px;
+  background:var(--panel);cursor:pointer;position:relative;transition:border-color .25s,transform .25s;text-align:left;color:inherit;font:inherit}
+.door:hover,.door:focus-visible{transform:translateY(-4px)}
+.door.sel{border-color:var(--accent)}
+.door .d-glyph{font-family:var(--serif);font-size:26px;display:block;margin-bottom:10px}
+.door h4{font-size:15.5px;font-weight:650;margin-bottom:5px}
+.door .d-share{font-family:var(--serif);font-size:30px;margin:10px 0 2px}
+.door .d-share .u{font-size:.55em;color:var(--dim)}
+.door .d-k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.door .d-perf{margin-top:12px;font-size:13px;color:var(--muted)}
+.door .d-perf b{font-weight:650}
+.door.major .d-share{color:var(--accent)}
+.door.walkin .d-share{color:var(--cool)}
+.door.other .d-share{color:var(--dim)}
+.door-detail{margin-top:22px;padding:18px 20px;border-radius:12px;background:rgba(94,234,212,.05);
+  border:1px solid rgba(94,234,212,.22);font-size:14.5px;color:var(--muted);line-height:1.6}
+.door-detail b{color:var(--ink)}
+.door-detail .say{color:var(--ink)}
+
+/* ---------- trolley chart ---------- */
+.trolley-legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+.trolley-legend .li{display:flex;align-items:center;gap:8px}
+.trolley-legend .bar-sw{width:16px;height:9px;border-radius:2px}
+.big-stat-row{display:flex;gap:clamp(20px,4vw,56px);flex-wrap:wrap;margin-top:26px}
+.big-stat .v{font-family:var(--serif);font-size:clamp(30px,4.4vw,44px);line-height:1.05}
+.big-stat .v .u{font-size:.5em;color:var(--dim)}
+.big-stat.hot .v{color:var(--hot)}
+.big-stat .k{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-top:6px;max-width:220px;line-height:1.5}
+
+/* ---------- seasons ---------- */
+.season-grid{display:grid;grid-template-columns:1.25fr .9fr;gap:clamp(24px,4vw,48px);align-items:end}
+@media (max-width:860px){.season-grid{grid-template-columns:1fr}}
+.season-legend{display:flex;gap:20px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);font-family:var(--mono);margin-top:8px}
+.season-legend .li{display:flex;align-items:center;gap:8px}
+.season-legend .dot-sw{width:9px;height:9px;border-radius:50%}
+.season-legend .bar-sw{width:14px;height:9px;border-radius:2px}
+.season-callouts{margin-top:18px;display:grid;gap:12px}
+.s-call{border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--muted);background:rgba(var(--panel-wash),.5)}
+.s-call b{color:var(--ink)}
+.s-call .m-tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-right:8px}
+.s-call.july .m-tag{color:var(--accent)} .s-call.jan .m-tag{color:var(--hot)}
+
+/* ---------- explorer ---------- */
+.explorer-controls{display:flex;flex-direction:column;gap:26px;margin-top:40px;border:1px solid var(--line);
+  border-radius:16px;background:var(--panel);padding:clamp(20px,3vw,30px)}
+.ctrl-row{display:flex;flex-direction:column;gap:12px}
+.ctrl-label{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+.ctrl-label .cl-name{font-size:14.5px;font-weight:650}
+.ctrl-label .cl-hint{font-family:var(--mono);font-size:11.5px;color:var(--dim);letter-spacing:.05em}
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line2);background:transparent;color:var(--muted);border-radius:999px;
+  padding:9px 18px;font-size:13.5px;font-family:var(--sans);cursor:pointer;transition:all .2s;min-height:44px}
+.seg button:hover{border-color:var(--accent);color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#06281f;font-weight:650}
+.year-slider{display:flex;align-items:center;gap:18px}
+.year-slider input[type=range]{flex:1;accent-color:var(--accent);height:44px;cursor:pointer}
+.year-slider .yv{font-family:var(--serif);font-size:30px;min-width:74px;text-align:center}
+.year-slider .y-end{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.explorer-status{display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:12.5px;
+  color:var(--muted);letter-spacing:.04em;flex-wrap:wrap}
+.explorer-status .pulse{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+.explorer-summary{margin-top:8px;font-size:14.5px;color:var(--muted)}
+.explorer-summary b{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.explorer-status .pulse{animation:none}}
+.explorer-status .pulse{animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ---------- findings ---------- */
+.findings{display:grid;gap:22px;margin-top:48px;counter-reset:fnd}
+.finding{border:1px solid var(--line);border-radius:16px;background:var(--panel);
+  padding:clamp(22px,3.4vw,34px);display:grid;grid-template-columns:52px 1fr;gap:8px 22px;position:relative;overflow:hidden}
+.finding::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.7}
+.finding.f2::before{background:var(--cool)} .finding.f3::before{background:var(--warm)}
+.finding.f4::before{background:var(--hot)} .finding.f5::before{background:#a78bfa}
+.finding .f-num{font-family:var(--serif);font-size:30px;color:var(--dim);grid-row:1/3;line-height:1;padding-top:4px}
+.finding h3{grid-column:2}
+.finding .f-body{grid-column:2;font-size:15px;color:var(--muted)}
+.finding .f-body .say{color:var(--ink)}
+.finding .f-proof{grid-column:2;display:flex;gap:10px 26px;flex-wrap:wrap;margin-top:16px}
+.f-proof .fp{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:rgba(var(--wash),.5)}
+.f-proof .fp .v{font-family:var(--serif);font-size:21px;line-height:1.15}
+.f-proof .fp .v .u{font-size:.6em;color:var(--dim)}
+.f-proof .fp .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-top:3px;line-height:1.5}
+@media (max-width:620px){.finding{grid-template-columns:1fr}.finding .f-num{grid-row:auto;grid-column:1}.finding h3,.finding .f-body,.finding .f-proof{grid-column:1}}
+
+/* ---------- takeaways ---------- */
+.takeaways{margin-top:44px;display:grid;gap:0}
+.take{display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:10px 34px;padding:26px 0;border-top:1px solid var(--line)}
+.take:last-child{border-bottom:1px solid var(--line)}
+.take .t-k{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);padding-top:5px}
+.take .t-v{font-family:var(--serif);font-size:clamp(18px,2.4vw,23px);line-height:1.4;text-wrap:balance}
+.take .t-v .say{color:var(--accent);font-style:italic}
+@media (max-width:620px){.take{grid-template-columns:1fr;gap:6px}}
+.caveats{margin-top:40px;border:1px solid var(--line);border-radius:14px;padding:24px 26px;background:rgba(var(--panel-wash),.5)}
+.caveats h4{font-size:14px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:16px}
+.caveats ul{list-style:none;display:grid;gap:12px}
+.caveats li{font-size:14.5px;color:var(--muted);padding-left:24px;position:relative;line-height:1.6}
+.caveats li::before{content:'·';position:absolute;left:8px;color:var(--warm);font-weight:700}
+.caveats li b{color:var(--ink)}
+
+/* ---------- method footer ---------- */
+#method{border-top:1px solid var(--line);background:var(--bg2);padding:70px 0 50px}
+.method-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:34px;margin-top:36px}
+.method-grid h4{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+.method-grid p,.method-grid li{font-size:13.5px;color:var(--muted);line-height:1.7}
+.method-grid ul{list-style:none}
+.method-grid li{padding-left:18px;position:relative}
+.method-grid li::before{content:'—';position:absolute;left:0;color:var(--dim)}
+.foot{margin-top:56px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.05em}
+
+/* progress bar */
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;z-index:70;transition:width .1s linear}
+@media (prefers-reduced-motion:reduce){#progress{transition:none}}
+
+/* cursor glow */
+#glow{position:fixed;width:520px;height:520px;border-radius:50%;pointer-events:none;z-index:1;
+  background:radial-gradient(circle,rgba(94,234,212,.05),transparent 62%);transform:translate(-50%,-50%);
+  left:50%;top:30%;opacity:0;transition:opacity 1s}
+body.has-pointer #glow{opacity:1}
+@media (prefers-reduced-motion:reduce){#glow{display:none}}
+
+@media (max-width:640px){
+  body{font-size:16px}
+  .hero-stats{gap:20px}
+  .viz{border-radius:13px}
+}
+/* ---------- site header (NHS identity + theme toggle) ---------- */
+body{padding-top:52px}
+.site-head{position:fixed;top:0;left:0;right:0;z-index:60;height:52px;
+  background:rgba(var(--wash),.82);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.site-head-row{max-width:1060px;margin:0 auto;padding:0 24px;height:100%;
+  display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;min-height:44px}
+.brand-title{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted)}
+.brand-title b{color:var(--ink);font-weight:650}
+.nhs-lozenge{display:block;flex:none}
+#theme-toggle{width:36px;height:36px;border-radius:10px;border:1px solid var(--line2);
+  background:transparent;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;
+  transition:color .2s,border-color .2s}
+#theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+@media (max-width:560px){.brand-title{display:none}}
+
+/* ═══════════════ trust map styles (extends existing tokens) ═══════════════ */
+#trustmap .map-shell{display:grid;grid-template-columns:230px 1fr 330px;gap:0;
+  padding:0;overflow:hidden;height:620px}
+.map-shell .viz-head{display:none}
+
+/* left sidebar */
+.trust-side{border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;
+  min-height:0;background:rgba(var(--wash),.35)}
+.side-label{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:10px;display:flex;justify-content:space-between}
+.trust-search{width:100%;background:var(--bg);border:1px solid var(--line2);color:var(--ink);
+  border-radius:8px;padding:9px 12px;font-size:13.5px;font-family:var(--sans);min-height:44px}
+.trust-search::placeholder{color:var(--dim)}
+.trust-search:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.trust-list{list-style:none;overflow-y:auto;margin-top:12px;flex:1;display:flex;
+  flex-direction:column;gap:2px;padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.trust-list li{position:relative}
+.t-item{width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--muted);
+  border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.35;cursor:pointer;
+  display:flex;flex-direction:column;gap:2px;font-family:var(--sans);transition:background .15s,color .15s}
+.t-item:hover{background:rgba(148,163,184,.08);color:var(--ink)}
+.t-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.t-item.sel{background:rgba(94,234,212,.1);border-color:rgba(94,234,212,.4);color:var(--ink)}
+.t-item .t-code{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.08em}
+.t-item.sel .t-code{color:var(--accent)}
+.no-match{color:var(--dim);font-size:13px;padding:14px 6px;line-height:1.5}
+
+/* middle stage */
+.map-stage{position:relative;background:var(--mapbg)}
+#ukmap{position:absolute;inset:0;background:var(--mapbg);outline:none}
+.map-hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:500;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);pointer-events:none;white-space:nowrap;
+  background:rgba(var(--wash),.65);padding:5px 12px;border-radius:999px;border:1px solid var(--line)}
+.map-reset{position:absolute;top:12px;right:12px;z-index:500;width:38px;height:38px;border-radius:9px;
+  border:1px solid var(--line2);background:rgba(var(--wash),.7);color:var(--muted);font-size:17px;
+  cursor:pointer;transition:color .2s,border-color .2s}
+/* leaflet dark-theme overrides */
+.leaflet-container{font-family:var(--sans)}
+.leaflet-control-zoom a{background:rgba(var(--wash),.85)!important;color:var(--muted)!important;
+  border-color:var(--line2)!important}
+.leaflet-control-zoom a:hover{color:var(--accent)!important}
+.leaflet-control-attribution{background:rgba(var(--wash),.7)!important;color:var(--dim)!important;
+  font-size:9.5px!important}
+.leaflet-control-attribution a{color:var(--dim)!important}
+.leaflet-tooltip.ae-tip{background:#111827;border:1px solid var(--line2);border-radius:10px;
+  padding:9px 13px;font-size:13px;color:var(--ink);max-width:240px;line-height:1.45;
+  box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.leaflet-tooltip.ae-tip::before{border-top-color:var(--line2)}
+.map-reset:hover{color:var(--accent);border-color:var(--accent)}
+
+/* right report panel */
+.trust-report{border-left:1px solid var(--line);padding:20px;overflow-y:auto;
+  background:rgba(var(--panel-wash),.55);scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.tr-empty{display:flex;flex-direction:column;gap:12px;color:var(--muted);font-size:14px;height:100%;
+  justify-content:center;text-align:center;padding:24px 8px}
+.tr-empty-glyph{font-family:var(--serif);font-size:44px;color:var(--dim);line-height:1}
+.linklike{background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;
+  text-decoration:underline;padding:0;min-height:auto}
+.linklike:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+.tr-kicker{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.tr-name{font-family:var(--serif);font-size:clamp(18px,1.8vw,22px);line-height:1.25;margin-bottom:4px}
+.tr-window{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em;margin-bottom:18px}
+.tr-metrics{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.tr-metric{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:10px;
+  border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:rgba(var(--wash),.45)}
+.tr-metric.hot{border-color:rgba(251,113,133,.35)}
+.tr-metric.good{border-color:rgba(94,234,212,.3)}
+.tr-metric .k{font-size:12px;color:var(--muted);line-height:1.4}
+.tr-metric .v{font-family:var(--serif);font-size:clamp(19px,1.8vw,24px);white-space:nowrap}
+.tr-metric.hot .v{color:var(--hot)} .tr-metric.good .v{color:var(--accent)}
+.tr-metric .x{grid-column:1/-1;font-size:11px;color:var(--dim);margin-top:-6px;line-height:1.4}
+.tr-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.tr-badge{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--line2);border-radius:999px;padding:4px 10px;color:var(--muted)}
+.tr-badge.major{color:var(--accent);border-color:rgba(94,234,212,.35);background:rgba(94,234,212,.06)}
+.tr-badge.walkin{color:var(--cool);border-color:rgba(125,211,252,.35);background:rgba(125,211,252,.06)}
+.tr-block{margin-top:20px}
+.tr-block h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:10px}
+.tr-spark{width:100%;height:auto;display:block}
+.tr-note{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.55}
+.tr-note .say{color:var(--ink)}
+.tr-split{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0 8px}
+.tr-split span{display:block;height:100%}
+.tr-split-legend{display:flex;justify-content:space-between;font-family:var(--mono);
+  font-size:10.5px;color:var(--dim);letter-spacing:.04em}
+.tr-loading{display:flex;flex-direction:column;gap:14px;padding:8px 0}
+.tr-loading i{display:block;height:16px;border-radius:8px;background:linear-gradient(90deg,
+  rgba(148,163,184,.07), rgba(148,163,184,.16), rgba(148,163,184,.07));
+  background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.tr-loading i{animation:none}}
+.tr-unavailable{border:1px dashed var(--line2);border-radius:10px;padding:14px;color:var(--muted);
+  font-size:13px;line-height:1.5}
+
+/* responsive */
+@media (max-width:1080px){
+  #trustmap .map-shell{grid-template-columns:220px 1fr;height:auto;min-height:560px}
+  .trust-report{grid-column:1/-1;border-left:none;border-top:1px solid var(--line);max-height:520px}
+  .trust-side{min-height:560px}
+  .map-stage{height:560px}
+}
+@media (max-width:720px){
+  #trustmap .map-shell{grid-template-columns:1fr;height:auto}
+  .trust-side{border-right:none;border-bottom:1px solid var(--line);max-height:280px;min-height:0}
+  .map-stage{height:380px}
+}
+
+</style>
+</head>
+<body>
+<div id="progress" role="presentation"></div>
+<header class="site-head">
+  <div class="site-head-row">
+    <a class="brand" href="#hero" aria-label="NHS — back to top">
+      <svg class="nhs-lozenge" width="60" height="24" viewBox="0 0 60 24" role="img" aria-label="NHS">
+        <rect width="60" height="24" rx="3" fill="#005EB8"/>
+        <text x="30" y="18.5" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+          font-size="17" font-style="italic" font-weight="700" fill="#ffffff" letter-spacing=".5">NHS</text>
+      </svg>
+      <span class="brand-title"><b>A&amp;E</b> · eleven years in the waiting room</span>
+    </a>
+    <button id="theme-toggle" type="button" aria-label="Switch theme"></button>
+  </div>
+</header>
+<div id="glow" role="presentation"></div>
+<div id="tip" role="status" aria-live="polite"></div>
+<main>
+
+<!-- ══════════════════ HERO ══════════════════ -->
+<section id="hero" aria-label="Introduction">
+  <canvas id="hero-canvas" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <p class="hero-kicker">NHS England · Accident &amp; Emergency · June 2015 – July 2026</p>
+    <h1>Eleven years<br>in the <em>waiting room</em></h1>
+    <p class="hero-sub"><strong>Every month, every hospital A&amp;E in England files a report:</strong> how many
+      people came, how many waited too long, and what happened next.
+      This is that story — <strong>261,761,588 visits</strong> told in plain English.</p>
+    <div class="hero-stats">
+      <div class="hstat"><div class="v num" data-count="261761588">0</div><div class="k">A&amp;E attendances</div></div>
+      <div class="hstat"><div class="v num" data-count="65259271">0</div><div class="k">Emergency admissions</div></div>
+      <div class="hstat"><div class="v num" data-count="327">0</div><div class="k">NHS sites tracked</div></div>
+      <div class="hstat"><div class="v num" data-count="129">0</div><div class="k">Monthly reports</div></div>
+    </div>
+  </div>
+  <a class="scroll-cue" href="#about-data" aria-label="Scroll to the story">
+    <span>scroll</span><span class="line" aria-hidden="true"></span></a>
+</section>
+
+<!-- ticker -->
+<div id="ticker" aria-hidden="true"><div class="track">
+  <!-- filled by script (duplicated for seamless loop) -->
+</div></div>
+
+<!-- ══════════════════ SECTION 1 · WHAT IS THIS DATA? ══════════════════ -->
+<section id="about-data" class="sect" aria-labelledby="s1-h">
+  <div class="wrap-narrow">
+    <div class="reveal">
+      <p class="sect-label">01 · What is this?</p>
+      <h2 id="s1-h">Someone kept a receipt<br>for every A&amp;E visit in England.</h2>
+      <p class="lede">Since 2015, NHS England has published one spreadsheet each month. Every hospital
+        and walk-in centre in the country reports the same simple set of numbers:
+        how many people walked through the door, how long they waited, and how many were
+        admitted as emergencies.</p>
+      <p class="note">This website reads those receipts so you don't have to. Everything here comes from
+        one cleaned table of <strong>28,212 monthly reports</strong> — after removing duplicates,
+        fixing known errors, and reconciling against NHS national totals.</p>
+    </div>
+
+    <div class="defs reveal">
+      <div class="def"><span class="glyph" style="color:var(--accent)">🚶</span>
+        <h4>Attendances</h4>
+        <p>People who arrived at an A&amp;E or urgent care centre. Any arrival counts — by ambulance, by taxi, or on foot.</p>
+        <span class="ex">261.8 million over 11 years</span></div>
+      <div class="def"><span class="glyph" style="color:var(--warm)">⏱️</span>
+        <h4>The 4-hour promise</h4>
+        <p>NHS standards say you should be seen, treated, admitted or sent home within four hours of arriving.</p>
+        <span class="ex">The central rule of this data</span></div>
+      <div class="def"><span class="glyph" style="color:var(--hot)">🚫</span>
+        <h4>Breaches</h4>
+        <p>Visits that broke the 4-hour promise — the patient waited longer than four hours before their wait ended.</p>
+        <span class="ex">43.7 million breaches since 2017</span></div>
+      <div class="def"><span class="glyph" style="color:var(--cool)">🏥</span>
+        <h4>Emergency admissions</h4>
+        <p>Patients who were kept in hospital rather than sent home — about one visit in four ends this way.</p>
+        <span class="ex">65.3 million admissions</span></div>
+    </div>
+  </div>
+
+  <!-- anatomy of a report -->
+  <div class="wrap reveal">
+    <p class="fact-tag"><span class="dot"></span>Anatomy of a single monthly report — University Hospitals Birmingham, July 2026</p>
+    <div class="record">
+      <div class="record-head">
+        <span class="who">University Hospitals Birmingham NHS Foundation Trust</span>
+        <span class="when num">JULY 2026 · ONE OF 28,212 REPORTS</span>
+      </div>
+      <div class="rec-grid">
+        <div class="rec-cell"><div class="rv num">48,103</div><div class="rk">people arrived</div></div>
+        <div class="rec-cell hl"><div class="rv num">71.0%</div><div class="rk">left within 4 hours</div></div>
+        <div class="rec-cell bad"><div class="rv num">13,939</div><div class="rk">waited longer than 4h</div></div>
+        <div class="rec-cell"><div class="rv num">18,275</div><div class="rk">admitted to a ward</div></div>
+        <div class="rec-cell bad"><div class="rv num">2,187</div><div class="rk">waited on a trolley 12h+ <strong>after</strong> admission was decided</div></div>
+      </div>
+      <p class="rec-note">Read it like a person: <span class="say">“Nearly 50,000 people came to us in July.
+        Almost three in ten waited over four hours. And on 2,187 occasions, we had already decided to admit someone —
+        but no bed existed, so they waited on a trolley for twelve hours or more.”</span></p>
+    </div>
+
+    <p class="fact-tag" style="margin-top:44px"><span class="dot" style="background:var(--cool)"></span>The three kinds of front door</p>
+    <div class="doors" role="tablist" aria-label="Types of emergency department">
+      <button class="door major sel" role="tab" aria-selected="true" data-door="major" id="door-major">
+        <span class="d-glyph" style="color:var(--accent)">🏥</span>
+        <h4>Type 1 — Consultant-led A&amp;E</h4>
+        <span class="d-k">the classic hospital emergency department</span>
+        <div class="d-share num">63.9<span class="u">% of visits</span></div>
+        <p class="d-perf">Last 12 months, <b class="num">61%</b> were seen within 4 hours.</p>
+      </button>
+      <button class="door walkin" role="tab" aria-selected="false" data-door="walkin" id="door-walkin">
+        <span class="d-glyph" style="color:var(--cool)">🚪</span>
+        <h4>Type 3 — Walk-in &amp; urgent care</h4>
+        <span class="d-k">minor injuries, no appointment needed</span>
+        <div class="d-share num">33.8<span class="u">% of visits</span></div>
+        <p class="d-perf">Last 12 months, <b class="num">96.9%</b> were seen within 4 hours.</p>
+      </button>
+      <button class="door other" role="tab" aria-selected="false" data-door="other" id="door-other">
+        <span class="d-glyph" style="color:var(--dim)">🛏️</span>
+        <h4>Type 2 — Single speciality</h4>
+        <span class="d-k">e.g. eye casualty · rare and small</span>
+        <div class="d-share num">2.2<span class="u">% of visits</span></div>
+        <p class="d-perf">A rounding error in the national story — <b>1 in 45 visits</b>.</p>
+      </button>
+    </div>
+    <div class="door-detail" id="door-detail" role="tabpanel" aria-live="polite">
+      <b>Type 1 departments carry almost two-thirds of all demand — and nearly all of the waiting problem.</b>
+      In the last twelve months, only about <b class="num">61% of Type&nbsp;1 arrivals</b> met the 4-hour standard,
+      while walk-in centres managed <b class="num">96.9%</b>.
+      <span class="say">This may suggest the queue isn't really about minor injuries — it's concentrated at the big hospital front doors.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ SECTION 2 · WHAT DOES THE DATA SHOW? ══════════════════ -->
+<section id="patterns" class="sect sect-alt" aria-labelledby="s2-h">
+  <div class="wrap-narrow reveal">
+    <p class="sect-label">02 · What does the data show?</p>
+    <h2 id="s2-h">One line tells the whole story.</h2>
+    <p class="lede">Each dot below is one month of English A&amp;E. The dashed gold line is the national
+      promise: <strong>95% of patients seen within four hours.</strong> Watch where the line goes.</p>
+  </div>
+
+  <div class="wrap">
+    <div class="viz reveal">
+      <div class="viz-head">
+        <div>
+          <div class="viz-title">How often did England keep its 4-hour promise?</div>
+          <div class="viz-sub">Share of A&amp;E patients seen within four hours, nationally, month by month.
+          Hover any point for that month's numbers.</div>
+        </div>
+        <div class="legend">
+          <span class="li"><span class="sw" style="background:var(--accent)"></span>monthly performance</span>
+          <span class="li"><span class="sw" style="background:transparent;border-top:2px dashed var(--warm);height:0"></span>95% target</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><svg id="slide-chart" viewBox="0 0 1000 430" role="img"
+        aria-label="Line chart of national monthly 4-hour performance from 2015 to 2026. England touched the 95 percent target once, in July 2015, then slid through the low nineties and high eighties. Performance fell to a low near 69 percent in late 2022 before recovering only partway, to about 75 percent by July 2026."></svg></div>
+      <div class="callout warn">⚠ In eleven years, exactly <b class="num">&nbsp;one&nbsp;</b> month met the 95% promise —
+        July 2015. There hasn't been another since.</div>
+      <p class="chart-note"><span class="say">What changed:</span> England came close year after year —
+        <strong class="num">90.8%</strong> in June 2018, mid-80s in good winters — but never crossed the line again.
+        Then the floor gave way: performance bottomed at <strong class="num">69.0%</strong> in November 2022, meaning
+        <em>nearly one patient in three</em> waited more than four hours. The slow climb back to ~75% is real, but it
+        remains far from the old normal. <span class="say">This may suggest something structural changed in
+        2021–22, not just a bad winter.</span></p>
+    </div>
+  </div>
+
+  <!-- doors opening / type gap -->
+  <div class="wrap reveal" style="margin-top:clamp(60px,10vh,110px)">
+    <p class="sect-label">03 · Two kinds of waiting</p>
+    <h2>The same NHS, two different worlds.</h2>
+    <p class="lede">Split every month's performance by front door: big consultant-led A&amp;Es versus small
+      walk-in centres. One world barely moved. The other fell apart.</p>
+    <div class="viz">
+      <div class="viz-head">
+        <div>
+          <div class="viz-title">Walk-in centres kept their promise. Big A&amp;Es lost theirs.</div>
+          <div class="viz-sub">Performance split by department type. Before April 2017 the NHS didn't publish
+            the breach detail used here, so the chart starts where the data does.</div>
+        </div>
+        <div class="legend">
+          <span class="li"><span class="sw" style="background:var(--cool)"></span>walk-in / urgent care</span>
+          <span class="li"><span class="sw" style="background:var(--accent)"></span>all A&amp;E</span>
+          <span class="li"><span class="sw" style="background:var(--hot)"></span>consultant-led (Type 1)</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><svg id="doors-chart" viewBox="0 0 1000 380" role="img"
+        aria-label="Three-line chart comparing 4-hour performance from April 2017. Walk-in centres stay between roughly 94 and 99 percent throughout. All A&E combined falls from about 90 percent to the mid-seventies. Consultant-led Type 1 departments fall from about 86 percent to around 61 percent, dipping below 59 percent in early 2022."></svg></div>
+      <div class="callout hot">In winter 2021–22, monthly performance at big
+        consultant-led A&amp;Es fell as low as <b class="num">&nbsp;58.7%&nbsp;</b> — four patients in ten waited more than four hours.</div>
+      <p class="chart-note"><span class="say">Why this matters:</span> if the whole system had simply slowed down,
+        both lines would fall together. Instead, walk-in centres stayed above <strong class="num">94%</strong> the
+        entire time while Type&nbsp;1 dipped below 60%. <span class="say">This may suggest the pressure lives at
+        the hospital door — emergencies, ambulance arrivals, and beds — not in the queues for plasters and stitches.</span></p>
+    </div>
+  </div>
+
+  <!-- trolley waits -->
+  <div class="wrap reveal" style="margin-top:clamp(60px,10vh,110px)">
+    <p class="sect-label">04 · The hidden number</p>
+    <h2>The wait nobody talks about:<br>after the decision to admit.</h2>
+    <p class="lede">Here is the part of A&amp;E that rarely makes headlines. When doctors decide a patient must be
+      admitted to a ward, the clock keeps running. Some patients wait <strong>half a day or more</strong> in A&amp;E
+      because no ward bed exists. These are called “trolley waits”.</p>
+    <div class="viz">
+      <div class="viz-head">
+        <div>
+          <div class="viz-title">Patients stuck on trolleys for 12+ hours exploded after 2021.</div>
+          <div class="viz-sub">Occasions per month when an admitted patient waited 12 hours or more in A&amp;E for a ward bed.</div>
+        </div>
+        <div class="trolley-legend">
+          <span class="li"><span class="bar-sw" style="background:linear-gradient(var(--hot),#be123c)"></span>12-hour trolley waits</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><svg id="trolley-chart" viewBox="0 0 1000 360" role="img"
+        aria-label="Bar chart of monthly 12-hour trolley waits. Bars are tiny, under five thousand per month, until 2021. They then climb steeply, exceeding sixty thousand per month in winter peaks of 2025 and 2026."></svg></div>
+      <div class="big-stat-row">
+        <div class="big-stat hot"><div class="v num">×19</div><div class="k">growth in monthly trolley waits, Jan 2021 vs Jan 2026</div></div>
+        <div class="big-stat hot"><div class="v num">1,379<span class="u">/day</span></div><div class="k">average 12h+ trolley waits during 2025 — about one every minute</div></div>
+        <div class="big-stat"><div class="v num">8.5%</div><div class="k">of all emergency admissions in 2025 involved a 12-hour trolley wait first</div></div>
+      </div>
+      <p class="chart-note"><span class="say">Read the shape, not just the size:</span> these bars are seasonal —
+        every winter spikes, every summer dips. But each peak now lands far above the last.
+        <span class="say">This may suggest hospitals are running with almost no spare beds, so ordinary winter
+        pressure turns into long corridor waits.</span></p>
+    </div>
+  </div>
+
+  <!-- seasonality -->
+  <div class="wrap reveal" style="margin-top:clamp(60px,10vh,110px)">
+    <p class="sect-label">05 · Rhythm of the year</p>
+    <h2>England's A&amp;E is busiest in July.<br>It copes worst in January.</h2>
+    <p class="lede">Two rhythms hide inside the year. Attendance rises gently into summer — school holidays,
+      festivals, injuries outdoors. Performance, though, sags in deep winter, when flu meets full wards.</p>
+    <div class="viz">
+      <div class="season-grid">
+        <div>
+          <div class="viz-head">
+            <div>
+              <div class="viz-title">Demand peaks in summer. Care quality dips in winter.</div>
+              <div class="viz-sub">Average across 11 years. Bars: how busy each month is vs a typical month (100 = average).
+                Line: share seen within 4 hours.</div>
+            </div>
+          </div>
+          <div class="chart-wrap"><svg id="season-chart" viewBox="0 0 640 340" role="img"
+            aria-label="Combined bar and line chart by calendar month. July is the busiest month at 105 percent of average attendance; February the quietest at 92. Performance is best in August at 78.9 percent and worst in January at 73.6 percent."></svg></div>
+          <div class="season-legend">
+            <span class="li"><span class="bar-sw" style="background:rgba(125,211,252,.35);border:1px solid rgba(125,211,252,.6)"></span>busyness vs average</span>
+            <span class="li"><span class="dot-sw" style="background:var(--accent)"></span>% seen within 4h</span>
+          </div>
+        </div>
+        <div class="season-callouts">
+          <div class="s-call july"><span class="m-tag">July</span> The busiest month of the year —
+            <b class="num">5% busier than average</b>. Summer pressure is real, but hospitals absorb it.</div>
+          <div class="s-call july" style="border-color:rgba(94,234,212,.3)"><span class="m-tag">August</span> The calmest
+            doors: <b class="num">78.9%</b> seen within 4 hours — the year's best performance.</div>
+          <div class="s-call jan"><span class="m-tag">January</span> The hardest month to keep the promise:
+            <b class="num">73.6%</b> despite quiet corridors — flu season meets beds already full.</div>
+          <div class="s-call jan" style="border-color:rgba(251,113,133,.25)"><span class="m-tag">February</span> The
+            quietest month for arrivals (<b class="num">8% below average</b>) — yet still no recovery in waiting times.</div>
+        </div>
+      </div>
+      <p class="chart-note"><span class="say">The counter-intuitive bit:</span> crowds aren't the problem — winter is.
+        The busiest summer months still hit <strong class="num">~77–79%</strong>, while quiet January delivers the
+        worst waits. <span class="say">This may suggest the binding constraint is hospital capacity — staffed beds —
+        which winter consumes, not visitor numbers.</span></p>
+    </div>
+  </div>
+<!-- ══════════════════ SECTION 3 · EXPLORE IT YOURSELF ══════════════════ -->
+<section id="explore" class="sect" aria-labelledby="s3-h">
+  <div class="wrap-narrow reveal">
+    <p class="sect-label">03 · Explore it yourself</p>
+    <h2 id="s3-h">Ask the data your own question.</h2>
+    <p class="lede">Below are all <strong>204 NHS sites</strong> that reported in the last year — each dot is one
+      site's most recent twelve months. Filter by kind of door and watch England rearrange itself.</p>
+  </div>
+  <div class="wrap">
+    <div class="viz reveal">
+      <div class="explorer-controls">
+        <div class="ctrl-row">
+          <div class="ctrl-label"><span class="cl-name">Which sites to show</span>
+            <span class="cl-hint">pick one or mix</span></div>
+          <div class="seg" role="group" aria-label="Filter by type of site">
+            <button data-kind="all" aria-pressed="true">Everyone</button>
+            <button data-kind="major" aria-pressed="false">Big A&amp;E hospitals</button>
+            <button data-kind="walkin" aria-pressed="false">Walk-in centres</button>
+          </div>
+        </div>
+        <div class="explorer-status" aria-live="polite">
+          <span class="pulse"></span><span id="ex-count">Showing 204 sites · 25,922,702 attendances in view</span>
+        </div>
+      </div>
+
+      <div class="chart-wrap" style="margin-top:24px"><svg id="scatter-chart" viewBox="0 0 1000 460" role="img"
+        aria-label="Scatter plot of NHS sites. Horizontal position shows how many people attended in the selected period; vertical position shows the share seen within four hours. The 95 percent target line crosses the top. Big hospitals cluster at high volume with lower performance; walk-in centres sit higher."></svg></div>
+
+      <div class="explorer-summary" id="ex-summary">
+        Right now you're looking at <b>every reporting site over the last 12 months</b>.
+        Most big hospitals (larger dots) sit <b>below the gold line</b>; walk-in centres (small dots) float above it.
+        <span style="color:var(--dim)">Drag the slider toward “now” to zoom into recent months, or back to see earlier periods.</span>
+      </div>
+
+      <div class="viz-head" style="margin-top:18px">
+        <div class="legend">
+          <span class="li"><span class="sw" style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>big A&amp;E hospital</span>
+          <span class="li"><span class="sw" style="width:7px;height:7px;border-radius:50%;background:var(--cool)"></span>walk-in centre</span>
+          <span class="li"><span class="sw" style="background:transparent;border-top:2px dashed var(--warm);height:0"></span>95% promise line</span>
+        </div>
+        <div class="legend"><span class="li" id="hover-hint">hover a dot for that site's story · click to pin it</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ SECTION · TRUST MAP ══════════════════ -->
+<section id="trustmap" class="sect" aria-labelledby="s6-h">
+  <div class="wrap-narrow reveal">
+    <p class="sect-label">06 · Explore the map</p>
+    <h2 id="s6-h">Find your hospital.<br>See its eleven years.</h2>
+    <p class="lede">Every reporting NHS trust sits where it actually is — placed by its registered
+      headquarters address. Drag to look around, scroll or pinch to zoom, hover for a summary,
+      and click a marker to open that trust's full report.</p>
+    <p class="note" style="margin-top:10px"><strong>Sites shown at their headquarters:</strong> 179 of the 204 trusts are
+      placed by their official NHS Digital registered postcode; the rest sit near their regional centre
+      (marked with a hollow ring). A few trusts report under several sites — their numbers here are combined.</p>
+  </div>
+
+  <div class="wrap">
+    <div class="viz reveal map-shell" id="map-app">
+      <!-- left: searchable trust list -->
+      <div class="trust-side">
+        <label class="side-label" for="trust-search">All trusts <span class="side-count num" id="trust-count"></span></label>
+        <input type="search" id="trust-search" class="trust-search" placeholder="Search trusts…"
+          autocomplete="off" aria-describedby="trust-count">
+        <ul class="trust-list" id="trust-list" role="listbox" aria-label="NHS trusts">
+          <!-- populated by script -->
+        </ul>
+      </div>
+
+      <!-- middle: Leaflet map -->
+      <div class="map-stage" id="map-stage">
+        <div id="ukmap" role="application"
+          aria-label="Interactive map of the UK showing NHS trusts. Use the list beside the map to select a trust."></div>
+        <div class="map-hint" id="map-hint">drag to pan · scroll to zoom · click a marker</div>
+        <button class="map-reset" id="map-reset" title="Reset view" aria-label="Reset map view">⌂</button>
+      </div>
+
+      <!-- right: selected trust report -->
+      <aside class="trust-report" id="trust-report" aria-live="polite">
+        <div class="tr-empty" id="tr-empty">
+          <span class="tr-empty-glyph" aria-hidden="true">⌖</span>
+          <b>Select a trust to see its story.</b>
+          <span>Click a marker on the map, or search the list — try <button class="linklike" data-jump="RRK">University Hospitals Birmingham</button>.</span>
+        </div>
+        <div class="tr-body" id="tr-body" hidden></div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ SECTION 4 · BIGGEST DISCOVERIES ══════════════════ -->
+<section id="discoveries" class="sect sect-alt" aria-labelledby="s4-h">
+  <div class="wrap-narrow reveal">
+    <p class="sect-label">04 · The biggest discoveries</p>
+    <h2 id="s4-h">Five things this data<br>will not let us forget.</h2>
+  </div>
+  <div class="wrap">
+    <div class="findings">
+
+      <article class="finding reveal f1">
+        <div class="f-num" aria-hidden="true">1</div>
+        <h3>The promise was kept once in eleven years.</h3>
+        <div class="f-body">In <strong>July 2015</strong>, 95.0% of patients were seen within four hours — the only
+          month in this entire dataset that met the national standard.
+          In the <strong>128 months since</strong>, it hasn't happened once, even at the pandemic's quietest.
+          <span class="say">This may suggest the target was already slipping out of reach before anything "broke" — and the pandemic then reset what "normal" means.</span></div>
+        <div class="f-proof">
+          <div class="fp"><div class="v num">1<span class="u">&nbsp;of&nbsp;129</span></div><div class="k">months at ≥95% since 2015</div></div>
+          <div class="fp"><div class="v num">Jul 2015</div><div class="k">the last time the promise was kept</div></div>
+          <div class="fp"><div class="v num">83.2%</div><div class="k">best month since (May 2020)</div></div>
+        </div>
+      </article>
+
+      <article class="finding reveal f2">
+        <div class="f-num" aria-hidden="true">2</div>
+        <h3>A quarter of all patients now wait longer than four hours.</h3>
+        <div class="f-body">Over the full eleven years, <strong class="num">79.4%</strong> of visits with recorded
+          waits ended within four hours. That sounds tolerable — until you divide:
+          roughly <strong>one missed promise every four visits, forever</strong>. In the last twelve months,
+          <strong class="num">6.5 million</strong> people waited too long.
+          <span class="say">Each breach is not a statistic; it's someone's night in a corridor.</span></div>
+        <div class="f-proof">
+          <div class="fp"><div class="v num">43.7M</div><div class="k">total breaches since Apr 2017</div></div>
+          <div class="fp"><div class="v num">6.5M</div><div class="k">breaches, last 12 months</div></div>
+          <div class="fp"><div class="v num">1<span class="u">&nbsp;in&nbsp;4</span></div><div class="k">patients waited &gt;4h last year</div></div>
+        </div>
+      </article>
+
+      <article class="finding reveal f3">
+        <div class="f-num" aria-hidden="true">3</div>
+        <h3>Trolley waits grew nineteen-fold in five years.</h3>
+        <div class="f-body">In January 2021 there were <strong class="num">3,825</strong> occasions nationwide when an
+          admitted patient waited 12+ hours for a bed. By January 2026: <strong class="num">71,517</strong>.
+          <span class="say">This may suggest the sharpest deterioration isn't at the front door at all — it's the flow inside the hospital.</span></div>
+        <div class="f-proof">
+          <div class="fp"><div class="v num">3,825 → 71,517</div><div class="k">monthly 12h trolley waits, Jan '21 → Jan '26</div></div>
+          <div class="fp"><div class="v num">×19</div><div class="k">growth over five years</div></div>
+          <div class="fp"><div class="v num">8.5%</div><div class="k">of 2025 admissions had a trolley wait first</div></div>
+        </div>
+      </article>
+
+      <article class="finding reveal f4">
+        <div class="f-num" aria-hidden="true">4</div>
+        <h3>Where you go decides how long you wait.</h3>
+        <div class="f-body">Among the 80 busiest major-A&amp;E hospital trusts, the best twelve months averaged
+          <strong class="num">84.1%</strong> within four hours; the worst averaged <strong class="num">53.0%</strong>.
+          Same country, same rules, same year. <span class="say">This may suggest performance is shaped by local
+          capacity and organisation — your postcode partly picks your wait.</span></div>
+        <div class="f-proof">
+          <div class="fp"><div class="v num">84.1%</div><div class="k">best major trust avg (Calderdale &amp; Huddersfield)</div></div>
+          <div class="fp"><div class="v num">53.0%</div><div class="k">worst major trust avg (Shrewsbury &amp; Telford)</div></div>
+          <div class="fp"><div class="v num">80</div><div class="k">major trusts compared</div></div>
+        </div>
+      </article>
+
+      <article class="finding reveal f5">
+        <div class="f-num" aria-hidden="true">5</div>
+        <h3>Demand came back bigger than ever.</h3>
+        <div class="f-body">The pandemic emptied waiting rooms — April 2020 saw fewer than
+          <strong class="num">a million</strong> attendances nationally. But demand didn't shrink permanently:
+          the last twelve months set an all-time record of <strong class="num">25.9 million</strong> attendances,
+          while emergency admissions stayed near historic highs.
+          <span class="say">An A&amp;E system being asked to do more than at any point in its history.</span></div>
+        <div class="f-proof">
+          <div class="fp"><div class="v num">25.9M</div><div class="k">attendances, last 12m — record high</div></div>
+          <div class="fp"><div class="v num">0.9M</div><div class="k">April 2020, the lockdown low</div></div>
+          <div class="fp"><div class="v num">46<span class="u">/min</span></div><div class="k">average arrivals, day and night</div></div>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ SECTION 5 · TAKEAWAYS ══════════════════ -->
+<section id="takeaways" class="sect" aria-labelledby="s5-h">
+  <div class="wrap-narrow reveal">
+    <p class="sect-label">05 · What should we take away?</p>
+    <h2 id="s5-h">If you remember three things…</h2>
+    <div class="takeaways">
+      <div class="take">
+        <div class="t-k">The fact</div>
+        <div class="t-v">England's A&amp;Es treated <span class="num">261.8 million</span> people in eleven years —
+          and the share seen quickly fell from ~90% to ~75% and has never recovered.</div>
+      </div>
+      <div class="take">
+        <div class="t-k">The twist</div>
+        <div class="t-v">The problem isn't crowds. Summer's record queues outperform winter's quiet ones;
+          the missing ingredient is <span class="say">flow — staffed beds to move admitted patients into.</span></div>
+      </div>
+      <div class="take">
+        <div class="t-k">The human sum</div>
+        <div class="t-v">Behind the averages: <span class="num">6.5 million</span> breached waits last year and
+          <span class="num">553,345</span> twelve-hour trolley waits. <span class="say">Every number on this page
+          is a person who waited.</span></div>
+      </div>
+    </div>
+
+    <div class="caveats reveal">
+      <h4>Honest limitations — read before quoting this page</h4>
+      <ul>
+        <li><b>Waiting-time detail starts in April 2017.</b> Before that, NHS publications omitted per-provider breach
+          counts, so all rates here cover April 2017 onward; totals cover the full eleven years.</li>
+        <li><b>Five months are incomplete in our copy</b> — Jan 2016, Aug/Oct/Dec 2022 and Dec 2025 have little or no
+          provider-level data, and January 2024 contains only one site. National figures for those months should be
+          read with care.</li>
+        <li><b>"Within 4 hours" is measured against the total arrival-to-departure journey,</b> including the wait after
+          a decision to admit — which is exactly why trolley waits matter so much.</li>
+        <li><b>This measures waits, not outcomes.</b> Nothing here says whether patients were healthier or sicker at the
+          end — only how long they waited.</li>
+        <li><b>Sites open, close, merge and rename.</b> 63 organisations changed names during these years; we track them
+          by their permanent code, so history stays attached to the right place.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ METHOD ══════════════════ -->
+<section id="method" aria-labelledby="m-h">
+  <div class="wrap">
+    <p class="sect-label">Where this comes from</p>
+    <div class="method-grid">
+      <div>
+        <h4>The source</h4>
+        <p>NHS England publishes monthly <em>“A&amp;E Attendances and Emergency Admissions”</em> statistics under the
+          Open Government Licence. Each file reports every provider's monthly counts — the raw material for
+          everything on this page.</p>
+      </div>
+      <div>
+        <h4>The journey</h4>
+        <ul>
+          <li>Monthly .xls files downloaded automatically</li>
+          <li>Messy two-row headers parsed; duplicates dropped</li>
+          <li>The national England row removed (it would double-count)</li>
+          <li>A known breach-definition quirk corrected (&gt;4h vs &lt;4h)</li>
+          <li>Each month reconciled against NHS national totals</li>
+          <li>One clean row per site per month: <span class="num">28,212</span> of them</li>
+        </ul>
+      </div>
+      <div>
+        <h4>On this page</h4>
+        <ul>
+          <li>Every number queried directly from the cleaned warehouse table <code>fct_ae_activity</code></li>
+          <li>Rates computed only over months where waits were published</li>
+          <li>No estimates, no projections, no invented values</li>
+          <li>Facts say <em>“the data shows…”</em>; readings say <em>“this may suggest…”</em></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot">
+      <span>Built as part of an open data-engineering portfolio project</span>
+      <span>Data © NHS England · OGL v3</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- data inlined no longer: see data/data.js -->
+<!-- app script moved to app.js -->
+<script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
+<script src="vendor/leaflet.js?v=2" defer></script>
+<script src="data/data.js?v=2" defer></script>
+<script src="app.js?v=2" defer></script>
+<script src="data/geo.js?v=2" defer></script>
+<script src="data/uk_geo.js?v=2" defer></script>
+<script src="data/trust_hist.js?v=2" defer></script>
+<script src="map.js?v=2" defer></script>
+</body>
+</html>
