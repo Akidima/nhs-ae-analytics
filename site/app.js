@@ -457,7 +457,8 @@ function hideTip() { tip.classList.remove('on'); }
   /* historical context events — dated facts from the period, short labels */
   [
     { ym: '2021-12', label: 'omicron wave', ly: m.t + ih * .18 },
-    { ym: '2022-12', label: "first nurses' strike", ly: m.t + ih * .34 }
+    // anchored on Jan-2023: Dec-2022 is an incomplete month in our copy
+    { ym: '2023-01', label: "nurses' strikes (from Dec '22)", ly: m.t + ih * .34 }
   ].forEach(ev => {
     const i = data.findIndex(d => d.ym === ev.ym);
     if (i < 0 || !okPt(data[i])) return;

@@ -851,21 +851,21 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     <div class="doors" role="tablist" aria-label="Types of emergency department">
       <button class="door major sel" role="tab" aria-selected="true" data-door="major" id="door-major">
         <span class="d-glyph" style="color:var(--accent)">🏥</span>
-        <h4><button class="gl" type="button" data-term="type1">Type 1 — Consultant-led A&amp;E</button></h4>
+        <h4>Type 1 — Consultant-led A&amp;E</h4>
         <span class="d-k">the classic hospital emergency department</span>
         <div class="d-share num">63.9<span class="u">% of visits</span></div>
         <p class="d-perf">Last 12 months, <b class="num">61%</b> were seen within 4 hours.</p>
       </button>
       <button class="door walkin" role="tab" aria-selected="false" data-door="walkin" id="door-walkin">
         <span class="d-glyph" style="color:var(--cool)">🚪</span>
-        <h4><button class="gl" type="button" data-term="type1">Type 3 — Walk-in &amp; urgent care</button></h4>
+        <h4>Type 3 — Walk-in &amp; urgent care</h4>
         <span class="d-k">minor injuries, no appointment needed</span>
         <div class="d-share num">33.8<span class="u">% of visits</span></div>
         <p class="d-perf">Last 12 months, <b class="num">96.9%</b> were seen within 4 hours.</p>
       </button>
       <button class="door other" role="tab" aria-selected="false" data-door="other" id="door-other">
         <span class="d-glyph" style="color:var(--dim)">🛏️</span>
-        <h4><button class="gl" type="button" data-term="type1">Type 2 — Single speciality</button></h4>
+        <h4>Type 2 — Single speciality</h4>
         <span class="d-k">e.g. eye casualty · rare and small</span>
         <div class="d-share num">2.2<span class="u">% of visits</span></div>
         <p class="d-perf">A rounding error in the national story — <b>1 in 45 visits</b>.</p>
@@ -873,7 +873,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     </div>
     <div class="door-detail" id="door-detail" role="tabpanel" aria-live="polite">
       <b>Type 1 departments carry almost two-thirds of all demand — and nearly all of the waiting problem.</b>
-      In the last twelve months, only about <b class="num">61% of Type&nbsp;1 arrivals</b> met the 4-hour standard,
+      In the last twelve months, only about <b class="num">61% of <span class="gl" data-term="type1" tabindex="0" role="button">Type&nbsp;1</span> arrivals</b> met the 4-hour standard,
       while walk-in centres managed <b class="num">96.9%</b>.
       <span class="say">This may suggest the queue isn't really about minor injuries — it's concentrated at the big hospital front doors.</span>
     </div>
@@ -1297,7 +1297,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
 <script src="vendor/leaflet.js?v=17" defer></script>
 <script src="data/data.js?v=17" defer></script>
-<script src="app.js?v=19" defer></script>
+<script src="app.js?v=20" defer></script>
 <script src="data/geo.js?v=17" defer></script>
 <script src="data/uk_geo.js?v=17" defer></script>
 <script src="data/trust_hist.js?v=17" defer></script>
