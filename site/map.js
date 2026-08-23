@@ -359,9 +359,18 @@ function buildCompareBlock() {
 /* ---------- patient-journey flow (overlaps stated explicitly) ---------- */
 function buildJourney(t, rec) {
   if (!rec || !rec.cov || !rec.att) {
-    return `<div class="tr-block"><h4>The patient journey</h4>
-      <div class="tr-unavailable">Waiting-time detail isn't published for this period, so the journey can't be drawn.</div></div>`;
+    // trusts with an exact 12-month roll-up but no monthly archive can still
+    // show the journey at full precision — clearly labelled as the window
+    if (!selPeriod && t.attCov > 0) {
+      rec = { ym: null, cov: true, att: t.att, w4: t.w4,
+              br: t.br != null ? t.br : Math.max(t.attCov - t.w4, 0),
+              adm: t.adm, dta: t.dta };
+    } else {
+      return `<div class="tr-block"><h4>The patient journey</h4>
+        <div class="tr-unavailable">Waiting-time detail isn't published for this period, so the journey can't be drawn.</div></div>`;
+    }
   }
+  const when = rec.ym ? C.monthLabel(rec.ym) : 'the last 12 reported months';
   const w4pct = Math.round(rec.w4 / rec.att * 1000) / 10;
   const br = rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0);
   const steps = [
@@ -371,7 +380,7 @@ function buildJourney(t, rec) {
     { v: rec.adm != null ? C.fmt(rec.adm) : '—', k: 'admitted to a ward', cls: '', note: 'different measure: admissions, not a subset of the wait split' },
     { v: rec.dta != null ? C.fmt(rec.dta) : '—', k: 'waited on a trolley 12h+', cls: 'hot', note: 'after the decision to admit — drawn from the admissions pathway' }
   ];
-  return `<div class="tr-block"><h4>The patient journey · ${C.monthLabel(rec.ym)}</h4>
+  return `<div class="tr-block"><h4>The patient journey · ${when}</h4>
     <div class="journey">${steps.map((s, i) =>
       `${i ? '<div class="j-arrow" aria-hidden="true">↓</div>' : ''}
        <div class="j-step ${s.cls}"><span class="j-v num">${s.v}</span><span class="j-k">${s.k}</span>
@@ -415,6 +424,9 @@ function renderReport(code) {
   const hist = C.history(code);
   const eng = C.england12m();
   const ctx = C.contextFor(code, selPeriod);
+  // monthly counts are packed at ÷1,000 precision — disclose when coarse
+  const rNote = v => (v != null && v > 0 && v < 10000)
+    ? ' · rounded to nearest 1K' : '';
 
   /* --- the one authoritative record for the selected period --- */
   const rec = C.currentRecord(code, selPeriod);        // exact month or latest covered
@@ -491,10 +503,10 @@ function renderReport(code) {
         x: `${(100 - pct).toFixed(1)}% of visits breached`, cls: (100 - pct) >= 30 ? 'hot' : '',
         explain: C.explainer('br', rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0), {}) },
       { k: 'waited on a trolley 12h+', gloss: 'trolley', v: rec.dta != null ? C.fmt(rec.dta) : 'Data unavailable',
-        x: rec.dta != null ? 'no ward bed after decision to admit' : 'not published this month', cls: '',
+        x: (rec.dta != null ? 'no ward bed after decision to admit' : 'not published this month') + rNote(rec.dta), cls: '',
         explain: rec.dta != null ? C.explainer('dta', rec.dta, {}) : null },
       { k: 'emergency admissions', v: rec.adm != null ? C.fmt(rec.adm) : 'Data unavailable',
-        x: rec.adm != null && rec.att ? `${Math.round(1000 * rec.adm / rec.att) / 10}% of arrivals admitted` : '', cls: '',
+        x: (rec.adm != null && rec.att ? `${Math.round(1000 * rec.adm / rec.att) / 10}% of arrivals admitted` : '') + rNote(rec.adm), cls: '',
         explain: rec.adm != null ? C.explainer('adm', rec.adm, { att: rec.att }) : null }
     ];
   } else {
@@ -747,6 +759,9 @@ function renderReport(code) {
       in this trust's archive. Months marked “Data unavailable” have no published figures — nothing is estimated.</li>
     <li><b>Region:</b> derived from the trust's registered headquarters postcode (${g.src === 'ods' ? C.GEO_BY_CODE.get(code).detail : 'placement record'});
       regional averages sum real reports from trusts in the same region.</li>
+    <li><b>Precision:</b> single-month counts of admissions and trolley waits are shown rounded to the nearest
+      thousand (${'~'}±500); attendances and 4-hour waits to the nearest ten. Rolling 12-month figures and all
+      percentages are computed at full precision.</li>
     <li><b>Limitations:</b> the 4-hour clock runs from arrival to departure, including waits after a decision to admit;
       these figures measure waits, not outcomes; organisations sometimes merge or rename (history stays attached by code).</li>
   </ul></details>`;
