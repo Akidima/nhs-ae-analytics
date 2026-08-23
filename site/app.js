@@ -499,6 +499,28 @@ function hideTip() { tip.classList.remove('on'); }
   svgEl('text', { class: 'anno-strong', x: x(iLast) - 4, y: y(data[iLast].perf) - 12, 'text-anchor': 'end', fill: 'var(--warm)' }, svg)
     .textContent = '75.4% — July 2026';
 
+  // April 2020: recording-guidance change — hover/focus for the caveat
+  {
+    const iA = data.findIndex(d => d.ym === '2020-04');
+    if (iA >= 0) {
+      const msg = 'NHS changed A&E recording guidance here due to COVID-19; direct pre/post comparisons require caution.';
+      const hit = svgEl('rect', {
+        x: x(iA) - 8, y: m.t, width: 16, height: ih,
+        fill: 'transparent', cursor: 'help', tabindex: '0', role: 'img', 'aria-label': msg
+      }, svg);
+      const act = ev => {
+        const r = hit.getBoundingClientRect();
+        showTip(`<div class="t-date">APRIL 2020 · DATA BREAK</div>${msg}`,
+          ev && ev.clientX || r.left + r.width / 2, ev && ev.clientY || r.top);
+      };
+      hit.addEventListener('pointerenter', act);
+      hit.addEventListener('pointermove', act);
+      hit.addEventListener('focus', act);
+      hit.addEventListener('pointerleave', hideTip);
+      hit.addEventListener('blur', hideTip);
+    }
+  }
+
   /* historical context events — dated facts from the period, short labels */
   [
     { ym: '2021-12', label: 'omicron wave', ly: m.t + ih * .18 },
@@ -1028,6 +1050,28 @@ function hideTip() { tip.classList.remove('on'); }
       const idx = [97, 92, 101, 94, 103, 102, 105, 100, 101, 104, 101, 100];
       return MN2.map((m2, i) => [m2, perf[i].toFixed(1) + '%', idx[i]]);
     });
+})();
+
+/* ═══════════════ best & worst 10 major trusts (static, accessible) ═════════ */
+(function extremeTables() {
+  const host = document.getElementById('extreme-tables');
+  if (!host) return;
+  const majors = P.filter(p => p[2] === 'major' && p[6] > 0)
+    .map(p => ({ name: p[1], code: p[0],
+      pct: Math.round(1000 * p[7] / p[6]) / 10,
+      att: p[3] }))
+    .sort((a2, b2) => b2.pct - a2.pct);
+  if (majors.length < 20) return;
+  const mk = (title, rows) =>
+    `<h4>${title}</h4><table><caption class="sr-only">${title}, by share seen within four hours over the last 12 reported months</caption>
+     <thead><tr><th scope="col">#</th><th scope="col">Trust</th><th scope="col">% within 4h</th></tr></thead>
+     <tbody>${rows.map((r, i) =>
+       `<tr><td class="num">${i + 1}</td><td>${r.name}</td><td class="num">${r.pct.toFixed(1)}%</td></tr>`).join('')}</tbody></table>`;
+  host.innerHTML =
+    `<div class="viz-head" style="margin-top:26px"><div class="legend"><span class="li">Same numbers, no hovering —
+     the ten strongest and ten weakest major A&amp;E trusts over the last 12 reported months.</span></div></div>
+     <div class="extreme-grid">${mk('10 best performing major trusts', majors.slice(0, 10))}
+     ${mk('10 worst performing major trusts', majors.slice(-10).reverse())}</div>`;
 })();
 
 /* ═══════════════════════ dataset download (OGL v3) ═══════════════════════ */

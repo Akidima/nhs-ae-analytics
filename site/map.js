@@ -97,7 +97,8 @@ function perfLabel(t) {
 }
 function renderList(filter) {
   const q = (filter || '').trim().toLowerCase();
-  const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q)) && p.att > 0);
+  const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q))
+    && (!regionFilter || p.region === regionFilter) && p.att > 0);
   if (!rows.length) {
     listEl.innerHTML = '<li class="no-match">No trusts match that search.</li>';
     return;
@@ -110,7 +111,7 @@ function renderList(filter) {
     b.setAttribute('role', 'option');
     b.setAttribute('aria-selected', String(p.code === selected));
     b.dataset.code = p.code;
-    b.innerHTML = `<span>${p.name}</span><span class="t-code">${p.code}${p.region ? ' · ' + p.region : ''} · ${C.fmtShort(p.att)} visits</span>`;
+    b.innerHTML = `<span>${p.name}</span><span class="t-code">${p.code}${p.region ? ' · ' + p.region : ''} · ${C.fmtShort(p.att)} visits${p.monthsTag}</span>`;
     b.addEventListener('click', () => { interacted = true; select(p.code); });
     b.addEventListener('pointerenter', () => setHover(p.code));
     b.addEventListener('pointerleave', () => setHover(null));
@@ -121,11 +122,40 @@ function renderList(filter) {
   listEl.appendChild(frag);
 }
 
+/* ── regional map filter ── */
+let regionFilter = '';
+const regionEl = document.getElementById('region-filter');
+if (regionEl) {
+  [...new Set(P.map(t => t.region).filter(Boolean))].sort()
+    .forEach(r => {
+      const o = document.createElement('option');
+      o.value = r; o.textContent = r;
+      regionEl.appendChild(o);
+    });
+  regionEl.addEventListener('change', () => {
+    regionFilter = regionEl.value;
+    renderList(searchEl.value);
+    applyRegionFilter(true);
+  });
+}
+function applyRegionFilter(fit) {
+  const pts = [];
+  markersByCode.forEach((m, code) => {
+    const inReg = !regionFilter || C.BY_CODE.get(code).region === regionFilter;
+    if (inReg) { m.addTo(map); const g2 = C.GEO_BY_CODE.get(code); if (g2) pts.push([g2.lat, g2.lon]); }
+    else map.removeLayer(m);
+  });
+  if (fit && pts.length > 1)
+    map.flyToBounds(L.latLngBounds(pts).pad(0.15), { duration: REDUCED ? 0 : .8, maxZoom: 9 });
+}
+
 let searchTimer;
 searchEl.addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => renderList(searchEl.value), 120);
 });
+
+P.forEach(tt => { tt.monthsTag = tt.months < 12 ? ` [${tt.months}/12 months]` : ''; });
 
 const jumpEl = document.querySelector('[data-jump]');
 if (jumpEl) jumpEl.addEventListener('click', function () {
@@ -217,7 +247,7 @@ function markerTooltipHtml(code) {
   const t = C.BY_CODE.get(code), g = C.GEO_BY_CODE.get(code);
   const metricLine = mapMetricLine(code);
   return `<div class="mt-name">${t.name}</div>
-     <div class="mt-sub">${C.fmtShort(t.att)} visits${t.attCov ? ' · ' + perfLabel(t) : ''}</div>
+     <div class="mt-sub">${C.fmtShort(t.att)} visits${t.attCov ? ' · ' + perfLabel(t) : ''}${t.monthsTag}</div>
      ${metricLine ? `<div class="mt-sub">${metricLine}</div>` : ''}
      <div class="mt-sub">${t.kind === 'major' ? 'big A&amp;E hospital' : t.kind === 'walkin' ? 'walk-in / community sites' : 'single-speciality site'}${g.src === 'approx' ? ' · <b>≈</b> region-level position' : ''}</div>
      ${g.src === 'ods' ? '<div class="mt-sub" style="color:#5c6a82">whole-trust total · placed at registered HQ</div>' : ''}
@@ -330,6 +360,8 @@ function animatePanel() {
 
 /* ---------- compare mode (pin 2–4 trusts, same reporting basis) ---------- */
 let cmpCodes = [];
+let cyMode = false;                       // Rolling 12m | Calendar year
+const CY = C.lastCompleteYear();
 function toggleCompare(code) {
   const i = cmpCodes.indexOf(code);
   if (i >= 0) cmpCodes.splice(i, 1);
@@ -346,10 +378,26 @@ function buildCompareBlock() {
       Open another trust and press <b>+ compare</b> to see 2–4 trusts side by side.
       <button class="linklike" id="tr-cmp-clear">clear</button></div></div>`;
   }
-  const rowsData = C.compareRows(cmpCodes, selPeriod);
-  const basis = selPeriod
-    ? `one month — ${C.monthLabel(selPeriod)}`
-    : `the same window — the last 12 reported months`;
+  let rowsData, basis;
+  if (!selPeriod && cyMode) {
+    const engY = C.englandYear(CY);
+    rowsData = cmpCodes.map(c => {
+      const t0 = C.BY_CODE.get(c); if (!t0) return null;
+      const r = C.yearRecord(c, CY);
+      return { code: c, name: t0.name, kind: t0.kind, shortName: C.shortName(t0.name),
+        att: r ? r.att : null,
+        perf: r && r.att ? 100 * r.w4 / r.att : null,
+        br: r ? r.br : null, dta: r ? r.dta : null, adm: r ? r.adm : null,
+        vsEngland: r && engY ? 100 * r.w4 / r.att - engY.perf : null,
+        dtaShare: r && r.dta != null && r.adm ? 100 * r.dta / r.adm : null };
+    }).filter(Boolean);
+    basis = `the same calendar year — Jan–Dec ${CY}`;
+  } else {
+    rowsData = C.compareRows(cmpCodes, selPeriod);
+    basis = selPeriod
+      ? `one month — ${C.monthLabel(selPeriod)}`
+      : `the same window — the last 12 reported months`;
+  }
   // metric definitions: [key, label, unit, higherIsBetter]
   const defs = [
     ['perf', 'Left within 4 hours', '%', true],
@@ -389,6 +437,10 @@ function buildCompareBlock() {
 
 /* ---------- patient-journey flow (overlaps stated explicitly) ---------- */
 function buildJourney(t, rec) {
+  if (cyMode && !rec) {
+    return `<div class="tr-block"><h4>The patient journey</h4>
+      <div class="tr-unavailable">No complete calendar-year data is available for this trust.</div></div>`;
+  }
   if (!rec || !rec.cov || !rec.att) {
     // trusts with an exact 12-month roll-up but no monthly archive can still
     // show the journey at full precision — clearly labelled as the window
@@ -401,21 +453,24 @@ function buildJourney(t, rec) {
         <div class="tr-unavailable">Waiting-time detail isn't published for this period, so the journey can't be drawn.</div></div>`;
     }
   }
-  const when = rec.ym ? C.monthLabel(rec.ym) : 'the last 12 reported months';
+  const when = rec.labelOverride || (rec.ym ? C.monthLabel(rec.ym) : 'the last 12 reported months');
   const w4pct = Math.round(rec.w4 / rec.att * 1000) / 10;
   const br = rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0);
+  const pctOfAtt = v => rec.att ? Math.max(2, Math.min(100, 100 * v / rec.att)) : 2;
   const steps = [
-    { v: C.fmt(rec.att), k: 'attendances', cls: '', note: 'every arrival recorded at A&E doors' },
-    { v: w4pct.toFixed(1) + '%', k: 'left within 4 hours', cls: 'good', note: `${C.fmt(rec.w4)} arrivals` },
-    { v: C.fmt(br), k: 'waited longer than 4h', cls: 'hot', note: `${w4pct >= 0 ? (100 - w4pct).toFixed(1) : '—'}% of arrivals` },
-    { v: rec.adm != null ? C.fmt(rec.adm) : '—', k: 'admitted to a ward', cls: '', note: 'different measure: admissions, not a subset of the wait split' },
-    { v: rec.dta != null ? C.fmt(rec.dta) : '—', k: 'waited on a trolley 12h+', cls: 'hot', note: 'after the decision to admit — drawn from the admissions pathway' }
+    { v: C.fmt(rec.att), k: 'attendances', cls: '', w: 100, note: 'every arrival recorded at A&E doors' },
+    { v: w4pct.toFixed(1) + '%', k: 'left within 4 hours', cls: 'good', w: Math.min(100, w4pct), note: `${C.fmt(rec.w4)} arrivals` },
+    { v: C.fmt(br), k: 'waited longer than 4h', cls: 'hot', w: pctOfAtt(br), note: `${w4pct >= 0 ? (100 - w4pct).toFixed(1) : '—'}% of arrivals` },
+    { v: rec.adm != null ? C.fmt(rec.adm) : '—', k: 'admitted to a ward', cls: '', w: rec.adm != null ? pctOfAtt(rec.adm) : 2, note: 'different measure: admissions, not a subset of the wait split' },
+    { v: rec.dta != null ? C.fmt(rec.dta) : '—', k: 'waited on a trolley 12h+', cls: 'hot', w: rec.dta != null && rec.adm ? Math.max(2, Math.min(100, 100 * rec.dta / rec.adm)) : 2, note: 'after the decision to admit — % bar shows share of admissions' }
   ];
   return `<div class="tr-block"><h4>The patient journey · ${when}</h4>
-    <div class="journey">${steps.map((s, i) =>
-      `${i ? '<div class="j-arrow" aria-hidden="true">↓</div>' : ''}
-       <div class="j-step ${s.cls}"><span class="j-v num">${s.v}</span><span class="j-k">${s.k}</span>
-       <span class="j-n">${s.note}</span></div>`).join('')}</div>
+    <div class="journey">${steps.map((st, i) =>
+      `${i ? '<div class="j-arrow" aria-hidden="true">→</div>' : ''}
+       <div class="j-step ${st.cls}"><span class="j-v num">${st.v}</span><span class="j-k">${st.k}</span>
+       <span class="j-bar" style="width:${st.w.toFixed(1)}%" role="img"
+         aria-label="bar: ${st.w.toFixed(0)} percent of attendances scale"></span>
+       <span class="j-n">${st.note}</span></div>`).join('')}</div>
     <div class="tr-note"><b>Read carefully:</b> these measures come from different parts of the monthly return.
       The 4-hour split covers every arrival; admissions and trolley waits follow the admission pathway, so they
       overlap rather than stack. This chart shows scale, not mutually exclusive buckets.</div></div>`;
@@ -426,13 +481,14 @@ let expSeq = 0;
 function tile(t) {
   const kHtml = t.gloss
     ? `<button class="gl" type="button" data-term="${t.gloss}">${t.k}</button>` : t.k;
+  const badgeHtml = t.badge || '';
   if (!t.explain) return `<div class="tr-stat ${t.cls || ''}">
     <span class="k">${kHtml}</span><span class="v num">${t.v}</span>
-    ${t.x ? `<span class="x">${t.x}</span>` : ''}</div>`;
+    ${t.x ? `<span class="x">${t.x}</span>` : ''}${badgeHtml}</div>`;
   const id = 'exp' + (++expSeq);
   return `<div class="tr-stat ${t.cls || ''}">
     <span class="k">${kHtml}</span><span class="v num">${t.v}</span>
-    ${t.x ? `<span class="x">${t.x}</span>` : ''}
+    ${t.x ? `<span class="x">${t.x}</span>` : ''}${badgeHtml}
     <button class="linklike exp-btn" type="button" aria-expanded="false"
       aria-controls="${id}">What does this mean?</button>
     <div class="explainer" id="${id}" hidden>${t.explain}</div></div>`;
@@ -468,6 +524,24 @@ function renderReport(code) {
   const brShare = brTotal != null && t.attCov ? Math.round(1000 * brTotal / t.attCov) / 10 : null;
   const admShare = t.adm != null && t.att ? Math.round(1000 * t.adm / t.att) / 10 : null;
   const perDay = t.att ? Math.round(t.att / 365) : null;
+
+  /* calendar-year mode: aggregate the most recent complete Jan–Dec */
+  const yrRec = cyMode ? C.yearRecord(code, CY) : null;
+  const eff = cyMode ? (yrRec || t) : t;   // what the headline tiles describe
+  const effPerf = cyMode ? (yrRec && yrRec.att ? 100 * yrRec.w4 / yrRec.att : null) : l12perf;
+
+  /* acute change (10): latest published month vs the rolling average */
+  let rollupBadge = null;
+  if (!monthMode && l12perf != null) {
+    const latest = C.currentRecord(code, null);
+    if (latest && latest.cov && latest.att) {
+      const mPct = Math.round(1000 * latest.w4 / latest.att) / 10;
+      const d = Math.round((mPct - l12perf) * 10) / 10;
+      if (Math.abs(d) > 10)
+        rollupBadge = `<span class="acute-badge ${d >= 0 ? 'up' : 'down'}">` +
+          `${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(0)}pp vs avg (${C.monthLabel(latest.ym)})</span>`;
+    }
+  }
 
   /* records across this trust's whole published archive */
   let bestM = null, worstM = null, busyM = null;
@@ -541,26 +615,33 @@ function renderReport(code) {
         explain: rec.adm != null ? C.explainer('adm', rec.adm, { att: rec.att }) : null }
     ];
   } else {
-    headLabel = `ROLLING WINDOW · LAST ${t.months} REPORTED MONTHS · TO ${C.monthLabel(C.LAST_YM).toUpperCase()}`;
+    headLabel = cyMode
+      ? `CALENDAR YEAR ${CY} · JAN–DEC · ${yrRec ? yrRec.months : 0} MONTHS PUBLISHED`
+      : `ROLLING WINDOW · LAST ${t.months} REPORTED MONTHS · TO ${C.monthLabel(C.LAST_YM).toUpperCase()}`;
     tiles = [
-      { k: 'attended · last 12 months', v: t.att != null ? C.fmt(t.att) : 'Data unavailable',
+      { k: cyMode ? `attendances · calendar year ${CY}` : 'attended · last 12 months',
+        v: eff.att != null ? C.fmt(eff.att) : 'Data unavailable',
         x: perDay ? `${C.fmtShort(perDay)} arrivals a day` : '', cls: '',
-        explain: C.explainer('att', t.att, { att: t.att }) },
-      { k: 'left within 4 hours', v: l12perf != null ? l12perf.toFixed(1) + '%' : 'Data unavailable',
-        x: l12perf == null ? '' : l12perf >= 95 ? 'promise kept on average'
-          : l12perf < eng.perf ? 'below England average' : 'above England average',
-        cls: l12perf == null ? '' : (l12perf >= 95 ? 'good' : l12perf < 60 ? 'hot' : ''),
-        explain: C.explainer('w4', t.w4, { perf: l12perf }) },
-      { k: 'waited longer than 4h', gloss: 'breach', v: brTotal != null ? C.fmt(brTotal) : 'Data unavailable',
-        x: brShare != null ? `${brShare}% of visits breached` : '',
+        explain: C.explainer('att', eff.att, { att: eff.att }) },
+      { k: 'left within 4 hours', badge: rollupBadge, v: effPerf != null ? effPerf.toFixed(1) + '%' : 'Data unavailable',
+        x: effPerf == null ? '' : effPerf >= 95 ? 'promise kept on average'
+          : effPerf < eng.perf ? 'below England average' : 'above England average',
+        cls: effPerf == null ? '' : (effPerf >= 95 ? 'good' : effPerf < 60 ? 'hot' : ''),
+        explain: C.explainer('w4', eff.w4, { perf: effPerf }) },
+      { k: 'waited longer than 4h', gloss: 'breach',
+        v: (cyMode ? yrRec.br : brTotal) != null ? C.fmt(cyMode ? yrRec.br : brTotal) : 'Data unavailable',
+        x: (!cyMode && brShare != null) ? `${brShare}% of visits breached`
+          : (cyMode && yrRec && yrRec.att ? `${Math.round(1000 * yrRec.br / yrRec.att) / 10}% of visits breached` : ''),
         cls: brShare != null && brShare >= 30 ? 'hot' : '',
-        explain: C.explainer('br', brTotal, {}) },
-      { k: 'waited on a trolley 12h+', gloss: 'trolley', v: t.dta != null ? C.fmt(t.dta) : 'Data unavailable',
-        x: t.dta ? 'no ward bed after decision to admit' : '', cls: '',
-        explain: C.explainer('dta', t.dta, {}) },
-      { k: 'emergency admissions', v: t.adm != null ? C.fmt(t.adm) : 'Data unavailable',
-        x: admShare != null ? `${admShare}% of arrivals admitted` : '', cls: '',
-        explain: C.explainer('adm', t.adm, { att: t.att }) },
+        explain: C.explainer('br', cyMode ? yrRec.br : brTotal, {}) },
+      { k: 'waited on a trolley 12h+', gloss: 'trolley',
+        v: (cyMode ? yrRec.dta : t.dta) != null ? C.fmt(cyMode ? yrRec.dta : t.dta) : 'Data unavailable',
+        x: (cyMode ? yrRec.dta : t.dta) ? 'no ward bed after decision to admit' : '', cls: '',
+        explain: C.explainer('dta', cyMode ? yrRec.dta : t.dta, {}) },
+      { k: 'emergency admissions', v: (cyMode ? yrRec.adm : t.adm) != null ? C.fmt(cyMode ? yrRec.adm : t.adm) : 'Data unavailable',
+        x: (!cyMode && admShare != null) ? `${admShare}% of arrivals admitted`
+          : (cyMode && yrRec && yrRec.adm != null && yrRec.att ? `${Math.round(1000 * yrRec.adm / yrRec.att) / 10}% of arrivals admitted` : ''), cls: '',
+        explain: C.explainer('adm', cyMode ? yrRec.adm : t.adm, { att: eff.att }) },
       { k: 'met the 95% promise', v: `${t.met} of ${t.months} months`,
         x: t.met === 0 ? 'not once in the window' : '', cls: t.met ? 'good' : '' },
       { k: 'busiest month on record', v: busyM ? C.fmt(busyM.att) : '—',
@@ -814,6 +895,12 @@ function renderReport(code) {
     <div class="tr-name">${t.name}</div>
     <div class="tr-window num">${kindName}${t.region ? ' · ' + t.region : ''} · ${headLabel}</div>
     ${dqPill}
+    ${!monthMode && hist ? `<div class="basis-toggle" role="group" aria-label="Reporting basis">
+      <button type="button" class="bt-btn ${!cyMode ? 'on' : ''}" data-basis="roll"
+        aria-pressed="${!cyMode}">Rolling 12m</button>
+      <button type="button" class="bt-btn ${cyMode ? 'on' : ''}" data-basis="cy"
+        aria-pressed="${cyMode}">Calendar year</button>
+    </div>` : ''}
 
     ${periodsBar}
     ${monthMode && (!rec || !rec.cov) ? `<div class="tr-unavailable">The NHS did not publish complete waiting-time
@@ -824,7 +911,8 @@ function renderReport(code) {
 
     ${ctxLine}
 
-    ${buildJourney(t, rec)}
+    ${buildJourney(t, monthMode ? rec
+      : (cyMode && yrRec ? Object.assign({}, yrRec, { ym: null, labelOverride: `calendar year ${CY}` }) : rec))}
 
     ${sparkSvg ? `<div class="tr-block"><h4>The eleven-year slide at this trust</h4>${sparkSvg}${sparkNote}${bwChips}</div>` :
        `<div class="tr-unavailable">Monthly waiting-time history isn't available for this site in the cleaned dataset.</div>`}
@@ -881,6 +969,13 @@ function renderReport(code) {
   }
   trBody.querySelectorAll('[data-goto-ym]').forEach(b =>
     b.addEventListener('click', () => gotoPeriod(b.dataset.gotoYm)));
+  trBody.querySelectorAll('.bt-btn').forEach(b =>
+    b.addEventListener('click', () => {
+      const next = b.dataset.basis === 'cy';
+      if (next === cyMode) return;
+      cyMode = next;
+      renderReport(selected);          // session-level choice; not in the URL
+    }));
 
   wireExplainers(trBody);
 

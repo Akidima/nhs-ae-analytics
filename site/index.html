@@ -532,6 +532,49 @@ html.light .tr-tip{background:#ffffff;color:#16202e;border-color:rgba(22,32,46,.
 .tr-unavailable{border:1px dashed var(--line2);border-radius:10px;padding:14px;color:var(--muted);
   font-size:13px;line-height:1.5}
 
+/* top/bottom-10 static tables under the scatter */
+.extreme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin-top:14px}
+.extreme-grid h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:8px}
+.extreme-grid table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.extreme-grid th{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--dim);text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--line2)}
+.extreme-grid td{padding:5px 10px 5px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+.extreme-grid td:nth-child(2){color:var(--ink)}
+
+/* hero caveat (front-loaded incomplete-months note) */
+.hero-caveat{margin-top:22px;font-size:12.5px;color:var(--dim);max-width:520px;line-height:1.55;
+  border-left:2px solid var(--warm);padding-left:10px}
+
+/* region filter beside trust search */
+.region-select{margin-top:8px;width:100%;cursor:pointer}
+
+/* rolling/calendar-year basis toggle */
+.basis-toggle{display:inline-flex;gap:0;margin-bottom:10px;border:1px solid var(--line2);
+  border-radius:9px;overflow:hidden;width:fit-content}
+.bt-btn{background:transparent;border:none;color:var(--muted);font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.06em;padding:9px 14px;cursor:pointer;min-height:36px}
+.bt-btn.on{background:rgba(94,234,212,.12);color:var(--accent)}
+.bt-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* acute-change badge on the 4-hour metric card */
+.acute-badge{display:inline-flex;align-items:center;gap:4px;margin-top:6px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.05em;border-radius:999px;
+  padding:4px 10px;width:fit-content}
+.acute-badge.down{border:1px solid rgba(251,113,133,.45);color:var(--hot);background:rgba(251,113,133,.08)}
+.acute-badge.up{border:1px solid rgba(94,234,212,.4);color:var(--accent);background:rgba(94,234,212,.07)}
+
+/* patient journey: parallel horizontal bars on wide screens */
+.j-bar{height:6px;border-radius:3px;background:var(--accent);opacity:.75;margin-top:6px;
+  min-width:4px;transition:width .6s cubic-bezier(.22,.6,.2,1)}
+.j-step.hot .j-bar{background:var(--hot)}
+@media (min-width:700px){
+  .journey{flex-direction:row;align-items:stretch;gap:6px}
+  .j-step{flex:1;display:flex;flex-direction:column;padding:10px}
+  .j-v{font-size:17px}
+  .j-arrow{transform:rotate(-90deg);align-self:center;padding:0 1px}
+}
+
 /* reduced motion: collapse every animation/transition to a blink */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{
@@ -737,7 +780,9 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* print / PDF: only the trust report survives */
 @media print{
-  body{padding-top:0;background:#fff;color:#111;font-size:12px}
+  body{padding-top:0;background:#fff;color:#000;font-size:12px}
+  .scroll-cue,#region-filter,.hero-caveat,.map-by,.map-legend,.tr-bestworst{display:none!important}
+  .tr-stat,.j-step,.rec-cell,.finding{page-break-inside:avoid}
   .site-head,#progress,#glow,#tip,#ticker,#hero,#about-data,#patterns,#explore,
   #discoveries,#takeaways,#method,.map-hint,.map-reset,.tr-actions,.exp-btn,
   #per-prev,#per-next,section#trustmap .viz-head{display:none!important}
@@ -802,6 +847,8 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       <div class="hstat"><div class="v num" data-count="327">0</div><div class="k">NHS sites tracked</div></div>
       <div class="hstat"><div class="v num" data-count="129">0</div><div class="k">Monthly reports</div></div>
     </div>
+    <p class="hero-caveat reveal">Data note: five months in our copy are incomplete — Jan 2016, Aug / Oct / Dec 2022
+      and Dec 2025 — so those months are marked as gaps throughout this page, never shown as zeros.</p>
   </div>
   <a class="scroll-cue" href="#about-data" aria-label="Scroll to the story">
     <span>scroll</span><span class="line" aria-hidden="true"></span></a>
@@ -844,6 +891,14 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <h4>Emergency admissions</h4>
         <p>Patients who were kept in hospital rather than sent home — about one visit in four ends this way.</p>
         <span class="ex">65.3 million admissions</span></div>
+      <div class="def"><span class="glyph" style="color:var(--accent)">🏛️</span>
+        <h4>NHS Trust</h4>
+        <p>The legal organisation — often running several hospitals and departments under one name and one monthly return.</p>
+        <span class="ex">e.g. “University Hospitals Birmingham NHS Foundation Trust”</span></div>
+      <div class="def"><span class="glyph" style="color:var(--warm)">🚪</span>
+        <h4>Reporting site</h4>
+        <p>An individual A&amp;E department filing its own numbers inside that trust. One trust can contain many sites.</p>
+        <span class="ex">Map markers show whole-trust totals, placed at HQ postcodes — not individual sites</span></div>
     </div>
   </div>
 
@@ -1064,6 +1119,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       <div class="chart-wrap" style="margin-top:24px"><svg id="scatter-chart" viewBox="0 0 1000 460" role="img"
         aria-label="Scatter plot of NHS sites. Horizontal position shows how many attendances were recorded in the selected period; vertical position shows the share seen within four hours. The 95 percent target line crosses the top. Big hospitals cluster at high volume with lower performance; walk-in centres sit higher."></svg></div>
 
+      <div id="extreme-tables" class="reveal" aria-label="Best and worst performing major trusts"></div>
       <div class="explorer-summary" id="ex-summary">
         Right now you're looking at <b>every reporting site over the last 12 months</b>.
         Most big hospitals (larger dots) sit <b>below the gold line</b>; walk-in centres (small dots) float above it.
@@ -1101,6 +1157,10 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <label class="side-label" for="trust-search">All trusts <span class="side-count num" id="trust-count"></span></label>
         <input type="search" id="trust-search" class="trust-search" placeholder="Search trusts…"
           autocomplete="off" aria-describedby="trust-count">
+        <select id="region-filter" class="trust-search region-select"
+          aria-label="Filter trusts by NHS region">
+          <option value="">All regions</option>
+        </select>
         <ul class="trust-list" id="trust-list" role="listbox" aria-label="NHS trusts">
           <!-- populated by script -->
         </ul>
@@ -1296,6 +1356,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
           <button class="dl-btn" id="dl-nat-csv" type="button">⬇ national · CSV</button>
           <button class="dl-btn" id="dl-prov-csv" type="button">⬇ trusts (12m) · CSV</button>
           <button class="dl-btn" id="dl-json" type="button">⬇ everything · JSON</button>
+          <a class="dl-btn" href="data/national-summary.csv" download>⬇ national summary · CSV</a>
         </div>
         <p class="dl-note">Contains public sector information licensed under the
           <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" rel="license">Open
@@ -1317,11 +1378,11 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <script>window.AE_TRUST_HIST=null;window.AE_TRUST_MONTHS=null;</script>
 <script src="vendor/leaflet.js?v=17" defer></script>
 <script src="data/data.js?v=17" defer></script>
-<script src="app.js?v=24" defer></script>
+<script src="app.js?v=25" defer></script>
 <script src="data/geo.js?v=17" defer></script>
 <script src="data/uk_geo.js?v=17" defer></script>
 <script src="data/trust_hist.js?v=17" defer></script>
-<script src="data-core.js?v=24" defer></script>
-<script src="map.js?v=24" defer></script>
+<script src="data-core.js?v=25" defer></script>
+<script src="map.js?v=25" defer></script>
 </body>
 </html>

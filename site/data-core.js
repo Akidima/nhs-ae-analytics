@@ -541,6 +541,45 @@ function cohortStats(code) {
   return out;
 }
 
+/* ---------- calendar-year basis (Jan–Dec, most recent complete year) ---------- */
+function lastCompleteYear() {
+  const ym = TM[TM.length - 1] || (M.length ? M[M.length - 1].p : '');
+  const y = +ym.slice(0, 4);
+  return ym.slice(5, 7) === '12' ? y : y - 1;
+}
+function yearRecord(code, year) {
+  const rows = (history(code) || [])
+    .filter(h => h.cov && h.ym.slice(0, 4) === String(year));
+  if (!rows.length) return null;
+  const sum = k => rows.reduce((s2, h) => s2 + (h[k] || 0), 0);
+  return {
+    ym: String(year), months: rows.length, cov: true,
+    att: sum('att'), w4: sum('w4'),
+    br: Math.max(sum('att') - sum('w4'), 0),
+    adm: rows.some(h => h.adm == null) ? null : sum('adm'),
+    dta: rows.some(h => h.dta == null) ? null : sum('dta')
+  };
+}
+function englandYear(year) {
+  let ac = 0, wc = 0;
+  M.forEach(r => {
+    if (r.p.slice(0, 4) !== String(year)) return;
+    ac += r.ac || 0; wc += r.wc || 0;
+  });
+  return ac > 0 ? { cov: ac, w4: wc, perf: 100 * wc / ac } : null;
+}
+function regionYearStats(region, year) {
+  if (!region) return null;
+  let cov = 0, w4 = 0, n = 0;
+  TRUSTS.forEach(t => {
+    if (t.region !== region) return;
+    const r = yearRecord(t.code, year);
+    if (!r) return;
+    cov += r.att; w4 += r.w4; n++;
+  });
+  return n ? { region, year, n, cov, w4, perf: 100 * w4 / cov } : null;
+}
+
 window.AECORE = {
   TRUSTS, BY_CODE, GEO_BY_CODE, PERIODS, MONTHS: MN,
   history, recordAt, currentRecord,
@@ -549,6 +588,7 @@ window.AECORE = {
   insights, explainer, fmt, fmtShort, monthLabel,
   parseHash, buildHash, reportCsv,
   MAP_METRICS, mapMetricValue, mapMetricBuckets, mapMetricColor, mapMetricChange, compareRows,
+  lastCompleteYear, yearRecord, englandYear, regionYearStats, shortName,
   LAST_YM: TM[TM.length - 1] || (M.length ? M[M.length - 1].p : null)
 };
 })();
