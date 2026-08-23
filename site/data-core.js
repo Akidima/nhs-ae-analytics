@@ -294,11 +294,11 @@ function explainer(key, v, ctx) {
   switch (key) {
     case 'att':
       return v == null ? null :
-        `About ${fmt(v)} people arrived at this trust's A&E doors over the last 12 months — roughly ${fmt(Math.round(v / 365))} every day.`;
+        `About ${fmt(v)} attendances took place at this trust's A&E doors over the last 12 months — roughly ${fmt(Math.round(v / 365))} every day.`;
     case 'w4':
       return v == null ? null :
         ctx.perf == null ? null :
-        `About ${Math.round(ctx.perf)} out of every 100 people who arrived left the emergency department within four hours. The NHS promise is 95 out of 100.`;
+        `About ${Math.round(ctx.perf)} out of every 100 arrivals left the emergency department within four hours. The NHS promise is 95 out of 100.`;
     case 'br':
       return v == null ? null :
         `${fmt(v)} visits ended more than four hours after arrival. A breach means the 4-hour promise was missed for that visit.`;

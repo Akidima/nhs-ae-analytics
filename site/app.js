@@ -29,6 +29,25 @@ const monthName = ym => {
   const [y, m] = ym.split('-').map(Number);
   return ['January','February','March','April','May','June','July','August','September','October','November','December'][m-1] + ' ' + y;
 };
+/* gold hollow diamond marking an incomplete month in our copy */
+function addGapMark(svg, cx, cy, msg) {
+  const g = svgEl('path', {
+    class: 'gap-mark',
+    d: `M${cx.toFixed(1)},${cy - 5} L${(cx + 5).toFixed(1)},${cy} L${cx.toFixed(1)},${cy + 5} L${(cx - 5).toFixed(1)},${cy} Z`,
+    tabindex: '0', role: 'img', 'aria-label': msg
+  }, svg);
+  const act = ev => {
+    const r = g.getBoundingClientRect();
+    showTip(`<div class="t-date">INCOMPLETE MONTH</div>${msg}`,
+      ev && ev.clientX || r.left + r.width / 2, ev && ev.clientY || r.top);
+  };
+  g.addEventListener('pointerenter', () => { g.setAttribute('fill', 'var(--warm)'); });
+  g.addEventListener('pointermove', act);
+  g.addEventListener('focus', act);
+  g.addEventListener('pointerleave', () => { g.setAttribute('fill', 'none'); hideTip(); });
+  g.addEventListener('blur', () => { g.setAttribute('fill', 'none'); hideTip(); });
+}
+
 function svgEl(tag, attrs, parent) {
   const e = document.createElementNS(NS, tag);
   for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -237,7 +256,8 @@ function hideTip() { tip.classList.remove('on'); }
   // text equivalents: visible caption + svg aria-label
   const cap = el.querySelector('#g-cap');
   cap.innerHTML = `About <b class="num">${perf.toFixed(1)}%</b> were seen within 4 hours in
-    ${label} — the NHS promise is <b class="num">95%</b>.`;
+    ${label} (the last reported month) — the NHS promise is <b class="num">95%</b>.
+    Trust pages compare against the rolling 12-month average instead.`;
   const svg = el.querySelector('svg');
   svg.setAttribute('aria-label',
     `Gauge: ${perf} percent of patients in England were seen within four hours in ${label}. ` +
@@ -426,14 +446,39 @@ function hideTip() { tip.classList.remove('on'); }
       ? `<div style="color:var(--hot);font-size:12px;margin-top:3px">${Math.round(d.ac - d.w).toLocaleString('en-GB')} waited too long</div>` : '';
     const html = `<div class="t-date">${monthName(d.ym).toUpperCase()}</div>
       <div class="t-big num">${d.perf.toFixed(1)}%</div> seen within 4 hours${brTxt}`;
-    hit.addEventListener('pointerenter', ev => {
+    hit.setAttribute('tabindex', '0');
+    hit.setAttribute('role', 'img');
+    hit.setAttribute('aria-label',
+      `${monthName(d.ym)}: ${d.perf.toFixed(1)} percent seen within four hours` +
+      (d.breaches != null ? `, ${(d.ac - d.w).toLocaleString('en-GB')} waited longer` : ''));
+    const activate = ev => {
       dot.setAttribute('r', 5.5); dot.setAttribute('fill', '#fff');
       dot.setAttribute('cx', x(d.i)); dot.setAttribute('cy', y(d.perf));
       g.appendChild(dot);
-      showTip(html, ev.clientX, ev.clientY);
+      const r = hit.getBoundingClientRect();
+      showTip(html, ev && ev.clientX || r.left + r.width / 2, ev && ev.clientY || r.top + r.height / 2);
+    };
+    hit.addEventListener('pointerenter', ev => {
+      activate(ev);
     });
+    hit.addEventListener('focus', activate);
     hit.addEventListener('pointermove', ev => showTip(html, ev.clientX, ev.clientY));
     hit.addEventListener('pointerleave', () => { hideTip(); if (dot.parentNode) dot.remove(); });
+    hit.addEventListener('blur', () => { hideTip(); if (dot.parentNode) dot.remove(); });
+    hit.dataset.i = d.i;
+  });
+  // arrow keys walk the timeline while focus stays inside the chart
+  svgEl('desc', {}, svg).textContent =
+    'Use left and right arrow keys to move between months.';
+  const hits = [...svg.querySelectorAll('rect[tabindex="0"]')]
+    .sort((a2, b2) => (+a2.dataset.i) - (+b2.dataset.i));
+  svg.addEventListener('keydown', ev => {
+    if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+    const i = hits.indexOf(document.activeElement);
+    if (i < 0) return;
+    ev.preventDefault();
+    const nxt = hits[Math.max(0, Math.min(hits.length - 1, i + (ev.key === 'ArrowRight' ? 1 : -1)))];
+    if (nxt !== document.activeElement) nxt.focus();
   });
 
   // annotations: the one target month, the 2018 high, the 2022 low, today
@@ -485,8 +530,7 @@ function hideTip() { tip.classList.remove('on'); }
     return out;
   }
   window.__aeIncompleteMonths = incompleteMonths();
-  const gaps = incompleteMonths();
-  gaps.forEach(ym => {
+  incompleteMonths().forEach(ym => {
     let li = -1, ri = -1;
     for (let k = 0; k < data.length; k++) {
       if (data[k].ym < ym) li = data[k].i;
@@ -494,19 +538,41 @@ function hideTip() { tip.classList.remove('on'); }
     }
     if (li < 0 && ri < 0) return;
     const cx = li >= 0 && ri >= 0 ? (x(li) + x(ri)) / 2 : (li >= 0 ? x(li) : x(ri));
-    const cy = m.t + ih + 8;
-    const msg = `${monthName(ym)} — incomplete month in our copy (few or no provider files). National figures for this month should be read with care.`;
-    const g = svgEl('path', {
-      class: 'gap-mark', d: `M${cx.toFixed(1)},${cy - 5} L${(cx + 5).toFixed(1)},${cy} L${cx.toFixed(1)},${cy + 5} L${(cx - 5).toFixed(1)},${cy} Z`,
-      tabindex: '0', role: 'img',
-      'aria-label': msg
-    }, svg);
-    const act = ev => showTip(`<div class="t-date">INCOMPLETE MONTH</div>${msg}`, ev.clientX || 0, ev.clientY || 0);
-    g.addEventListener('pointerenter', ev => { g.setAttribute('fill', 'var(--warm)'); act(ev); });
-    g.addEventListener('focus', () => { const r = svg.getBoundingClientRect(); act({ clientX: r.left + cx / W * r.width, clientY: r.top }); });
-    g.addEventListener('pointerleave', () => { g.setAttribute('fill', 'none'); hideTip(); });
-    g.addEventListener('blur', () => { g.setAttribute('fill', 'none'); hideTip(); });
+    addGapMark(svg, cx, m.t + ih + 8,
+      `${monthName(ym)} — incomplete month in our copy (few or no provider files). National figures for this month should be read with care.`);
   });
+})();
+
+(function chartSummaries() {
+  function summarize(id, html) {
+    const svg = document.getElementById(id);
+    if (!svg) return;
+    const p = document.createElement('p');
+    p.className = 'sr-only';
+    p.id = id + '-summary';
+    p.innerHTML = html;
+    svg.setAttribute('aria-describedby', p.id);
+    svg.insertAdjacentElement('afterend', p);
+  }
+  const valid = M.filter(r => r.pp != null && r.n >= 150 && r.pp <= 100);
+  if (valid.length) {
+    const f = valid[0], l = valid[valid.length - 1];
+    let best = valid[0], worst = valid[0];
+    valid.forEach(r => { if (r.pp > best.pp) best = r; if (r.pp < worst.pp) worst = r; });
+    summarize('slide-chart',
+      `National trend, ${monthName(f.p)} to ${monthName(l.p)}: performance started at ` +
+      `${f.pp.toFixed(1)} percent within four hours and ended at ${l.pp.toFixed(1)} percent. ` +
+      `The strongest month was ${monthName(best.p)} at ${best.pp.toFixed(1)} percent; ` +
+      `the weakest was ${monthName(worst.p)} at ${worst.pp.toFixed(1)} percent. ` +
+      `The 95 percent target has been met once in this period.`);
+  }
+  if (M.length) {
+    const tr = M.filter(r => r.p >= '2017-01' && r.d != null);
+    const first = tr[0], last = tr[tr.length - 1];
+    summarize('trolley-chart',
+      `Twelve-hour trolley waits rose from ${(first.d).toLocaleString('en-GB')} in ` +
+      `${monthName(first.p)} to ${(last.d).toLocaleString('en-GB')} in ${monthName(last.p)}.`);
+  }
 })();
 
 /* ═══════════════════════════ CHART 2 · TWO WORLDS ═══════════════════════════ */
@@ -625,6 +691,20 @@ function hideTip() { tip.classList.remove('on'); }
   svgEl('stop', { offset: '0%', 'stop-color': '#fb7185' }, grad);
   svgEl('stop', { offset: '100%', 'stop-color': '#be123c' }, grad);
 
+  // incomplete-month markers (Dec-25 hole etc.) — never rendered as zero bars
+  (window.__aeIncompleteMonths || []).forEach(ym => {
+    if (ym < '2017-01') return;
+    let li = -1, ri = -1;
+    data.forEach((d, j) => {
+      if (d.ym < ym) li = j;
+      if (ri < 0 && d.ym > ym) ri = j;
+    });
+    if (li < 0 && ri < 0) return;
+    const cx = li >= 0 && ri >= 0 ? (x(li) + x(ri)) / 2 : (li >= 0 ? x(li) : x(ri));
+    addGapMark(svg, cx, m.t + ih + 8,
+      `${monthName(ym)} — incomplete month in our copy; no reliable trolley-wait figure.`);
+  });
+
   // annotations: Jan21 vs Jan26
   const jan21 = data.find(d => d.ym === '2021-01'), jan26 = data.find(d => d.ym === '2026-01');
   svgEl('text', { class: 'anno-strong', x: x(data.indexOf(jan21)), y: y(jan21.d) - 8, 'text-anchor': 'middle' }, svg)
@@ -737,7 +817,7 @@ function hideTip() { tip.classList.remove('on'); }
       .textContent = v >= 1000 ? (v/1000) + 'K' : v;
   });
   svgEl('text', { class: 'axis', x: m.l + iw / 2, y: H - 8, 'text-anchor': 'middle' }, svg)
-    .textContent = '← quieter sites        people attended (log scale)        busier sites →';
+    .textContent = '← quieter sites        attendances (log scale)        busier sites →';
   svgEl('text', { class: 'axis', x: m.l - 38, y: m.t + ih / 2, 'text-anchor': 'middle',
     transform: `rotate(-90 ${m.l - 38} ${m.t + ih / 2})` }, svg).textContent = '% seen within 4 hours';
   svgEl('line', { class: 'target-line', x1: m.l, x2: W - m.r, y1: y(95), y2: y(95) }, svg);
@@ -776,6 +856,7 @@ function hideTip() { tip.classList.remove('on'); }
           (d.perf == null ? '' : `, ${d.perf.toFixed(1)} percent within four hours`)
       }, gDots);
       c._d = d;
+      c.classList.add('scatter-dot');
       const act = ev => {
         showTip(`<div class="t-date" style="color:${d.kind === 'major' ? 'var(--accent)' : 'var(--cool)'}">
             ${d.kind === 'major' ? 'BIG A&E HOSPITAL' : 'WALK-IN CENTRE'}</div>
@@ -804,6 +885,22 @@ function hideTip() { tip.classList.remove('on'); }
           x: x(d.att), y: y(d.perf == null ? 65 : d.perf) + dy, 'text-anchor': anchor, class: 'anno-strong'
         }, gLabels);
         t.textContent = tag;
+      });
+    }
+    // roving focus: only the first dot is tabbable; arrows move between dots
+    const dots = [...gDots.querySelectorAll('.scatter-dot')];
+    dots.forEach((c2, i2) => c2.setAttribute('tabindex', i2 === 0 ? '0' : '-1'));
+    svg.setAttribute('tabindex', '0');
+    if (!svg.dataset.kbd) {
+      svg.dataset.kbd = '1';
+      svg.addEventListener('keydown', ev => {
+        if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+        const cur = document.activeElement;
+        const i2 = dots.indexOf(cur);
+        if (i2 < 0) { dots[0].focus(); return; }
+        ev.preventDefault();
+        const n2 = dots[Math.max(0, Math.min(dots.length - 1, i2 + (ev.key === 'ArrowRight' ? 1 : -1)))];
+        if (n2 !== cur) { cur.setAttribute('tabindex', '-1'); n2.setAttribute('tabindex', '0'); n2.focus(); }
       });
     }
     document.getElementById('ex-count').textContent =
@@ -906,7 +1003,9 @@ function hideTip() { tip.classList.remove('on'); }
   attach('slide-chart',
     () => ['Month', '% seen within 4 hours', 'Providers reporting'],
     () => M.filter(r => r.pp != null && r.n >= 150 && r.pp <= 100)
-           .map(r => [monthName(r.p), r.pp.toFixed(1) + '%', r.n]));
+           .map(r => [monthName(r.p), r.pp.toFixed(1) + '%', r.n])
+      .concat((window.__aeIncompleteMonths || [])
+        .map(g => [monthName(g), 'incomplete month — excluded from the line', ''])));
   attach('doors-chart',
     () => ['Month', 'All A&E', 'Consultant-led (Type 1)', 'Walk-in / urgent care'],
     () => M.slice(M.findIndex(r => r.p === '2017-04'))
@@ -918,7 +1017,9 @@ function hideTip() { tip.classList.remove('on'); }
   attach('trolley-chart',
     () => ['Month', '12-hour trolley waits'],
     () => M.filter(r => r.p >= '2017-01' && r.d != null)
-           .map(r => [monthName(r.p), (+r.d).toLocaleString('en-GB')]));
+           .map(r => [monthName(r.p), (+r.d).toLocaleString('en-GB')])
+      .concat((window.__aeIncompleteMonths || []).filter(g => g >= '2017-01')
+        .map(g => [monthName(g), 'incomplete month — no figure'])));
   attach('season-chart',
     () => ['Calendar month', '% seen within 4 hours (11-year avg)', 'Busyness vs average'],
     () => {

@@ -163,10 +163,12 @@ setTimeout(() => {
     const out = trBody.innerHTML;
     check('UHB name shown', out.includes('University Hospitals Birmingham NHS Foundation Trust'));
     check('kicker shows code RRK', out.includes('RRK'));
-    check('metric: people arrived', out.includes('people arrived'));
+    check('metric: attendances (not “people”)', out.includes('attendances') && !out.includes('people arrived'));
     check('metric: left within 4 hours', out.includes('left within 4 hours'));
     check('metric: waited longer than 4h', out.includes('waited longer than 4h'));
-    check('metric: trolley 12h+', new RegExp('waited on a trolley 12h\\+[^<]*<\\/span><span class="v num">([\\d,]+|Data unavailable)</span>').test(out));
+    check('metric: trolley 12h+ (with glossary term)', new RegExp('waited on a trolley 12h\\+</button></span><span class="v num">([\\d,]+|Data unavailable)</span>').test(out));
+    check('similar-size cohort row present', out.includes('Similar size ·'));
+    check('cohort peers counted', /Similar size · .+ \(\d+\)/.test(out));
     check('sparkline drawn', out.includes('<svg class="tr-spark"'));
     const engPct = window.AECORE.england12m().perf.toFixed(1) + '%';
     check(`england comparison computed from data (${engPct})`, out.includes(engPct));
@@ -204,5 +206,5 @@ setTimeout(() => {
 
     console.log(failures ? `\n${failures} FAILURES` : '\nALL CHECKS PASSED');
     process.exit(failures ? 1 : 0);
-  }, 400);
-}, 300);
+  }, 1700);
+}, 1600);

@@ -13,14 +13,29 @@
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* Leaflet + data land deferred — poll briefly rather than fail */
+/* Leaflet + data land deferred — poll briefly rather than fail.
+   Once ready, heavy map init is kept OFF the initial-render critical path:
+   it starts immediately for trust deep links (#RRK…), otherwise when the
+   map section nears the viewport, with a short fallback timer so keyboard
+   and assistive-tech users are never stuck waiting on scroll events.      */
 let waited = 0;
 (function boot() {
   if (!(window.L && window.AE_MONTHLY && window.AE_PROVIDERS && window.AE_GEO && window.AECORE)) {
     if ((waited += 100) > 12000) return;   // give up silently; page still works
     return setTimeout(boot, 100);
   }
-  start();
+  const sec = document.getElementById('trustmap');
+  const deepLink = /^#[A-Z0-9]{3,6}(@|$)/.test((typeof location !== 'undefined' && location.hash) || '');
+  let started = false;
+  const go = () => { if (!started) { started = true; start(); } };
+  if (deepLink || !sec || !('IntersectionObserver' in window)) return go();
+  try {
+    const io = new IntersectionObserver((es, io2) => es.forEach(e => {
+      if (e.isIntersecting) { io2.disconnect(); go(); }
+    }), { rootMargin: '300px' });
+    io.observe(sec);
+    setTimeout(go, 1200);                  // fallback: never block interaction long
+  } catch (e) { go(); }
 })();
 
 function start() {
@@ -39,19 +54,34 @@ function setHover(code) { if (hover !== code) { hover = code; emit('hover'); } }
 function on(fn) { listeners.push(fn); }
 
 /* ---------- shareable deep links (#CODE or #CODE@YYYY-MM) ---------- */
-function syncHash() {
+function syncHash(push) {
   try {
     const h = C.buildHash(selected, selPeriod);
-    history.replaceState(null, '', h === '#' ? location.pathname + location.search : h);
+    const url = h === '#' ? location.pathname + location.search : h;
+    if (push) history.pushState({ ae: selected, period: selPeriod }, '', url);
+    else history.replaceState({ ae: selected, period: selPeriod }, '', url);
   } catch (e) { /* no-op */ }
 }
-window.addEventListener('hashchange', () => {
+let userNavigating = false;   // true once the visitor has moved at all
+/* one applier for both hashchange (anchor jumps) and popstate (back/forward
+   between trust views pushed via pushState) */
+let restoring = false;                 // browser-driven moves must never re-push
+function applyRoute() {
   const req = C.parseHash();
   const codeChanged = !!req.code && req.code !== selected;
   const periodChanged = (req.period || null) !== selPeriod;
   if (!codeChanged && !periodChanged) return;      // plain section anchors fall through
-  if (codeChanged) { selPeriod = req.period || null; interacted = true; select(req.code); }
-  else setPeriod(req.period || null);
+  restoring = true;
+  try {
+    if (codeChanged) { selPeriod = req.period || null; interacted = true; select(req.code); }
+    else setPeriod(req.period || null, false);
+  } finally { restoring = false; }
+}
+window.addEventListener('hashchange', applyRoute);
+window.addEventListener('popstate', e => {
+  // restore state from the entry itself when present, else from the hash
+  if (e.state && 'ae' in e) { /* state carries ae via custom key below */ }
+  applyRoute();
 });
 
 /* ---------- trust list (sidebar search) ---------- */
@@ -190,6 +220,7 @@ function markerTooltipHtml(code) {
      <div class="mt-sub">${C.fmtShort(t.att)} visits${t.attCov ? ' · ' + perfLabel(t) : ''}</div>
      ${metricLine ? `<div class="mt-sub">${metricLine}</div>` : ''}
      <div class="mt-sub">${t.kind === 'major' ? 'big A&amp;E hospital' : t.kind === 'walkin' ? 'walk-in / community sites' : 'single-speciality site'}${g.src === 'approx' ? ' · <b>≈</b> region-level position' : ''}</div>
+     ${g.src === 'ods' ? '<div class="mt-sub" style="color:#5c6a82">whole-trust total · placed at registered HQ</div>' : ''}
      <div class="mt-sub" style="margin-top:3px;color:#5c6a82">click for full report</div>`;
 }
 
@@ -216,7 +247,7 @@ function renderLegend() {
     legendEl.innerHTML = '<span class="ml-title">Coloured by front-door type:</span>' +
       '<span class="ml-item"><span class="ml-sw" style="background:var(--accent)"></span>major A&amp;E</span>' +
       '<span class="ml-item"><span class="ml-sw" style="background:var(--cool)"></span>walk-in / community</span>' +
-      '<span class="ml-note">dot size = attendances, last 12 months</span>';
+      '<span class="ml-note">dot size = attendances, last 12 months · dashed ring ≈ approximate location</span>';
     return;
   }
   const buckets = C.mapMetricBuckets(mapMetric, !!selPeriod);
@@ -269,10 +300,10 @@ function updateMapAnalysis() {
 
 /* the one mutation point for the reporting period: URL, map analysis and
    the report panel always move together */
-function setPeriod(p) {
-  if (selPeriod === p) return;
+function setPeriod(p, push) {
+  if (selPeriod === p && !push) return;
   selPeriod = p;
-  syncHash();
+  syncHash(push !== false && userNavigating);
   updateMapAnalysis();
   if (selected) renderReport(selected);
 }
@@ -374,8 +405,8 @@ function buildJourney(t, rec) {
   const w4pct = Math.round(rec.w4 / rec.att * 1000) / 10;
   const br = rec.br != null ? rec.br : Math.max(rec.att - rec.w4, 0);
   const steps = [
-    { v: C.fmt(rec.att), k: 'people arrived', cls: '', note: 'everyone who came through A&E doors' },
-    { v: w4pct.toFixed(1) + '%', k: 'left within 4 hours', cls: 'good', note: `${C.fmt(rec.w4)} people` },
+    { v: C.fmt(rec.att), k: 'attendances', cls: '', note: 'every arrival recorded at A&E doors' },
+    { v: w4pct.toFixed(1) + '%', k: 'left within 4 hours', cls: 'good', note: `${C.fmt(rec.w4)} arrivals` },
     { v: C.fmt(br), k: 'waited longer than 4h', cls: 'hot', note: `${w4pct >= 0 ? (100 - w4pct).toFixed(1) : '—'}% of arrivals` },
     { v: rec.adm != null ? C.fmt(rec.adm) : '—', k: 'admitted to a ward', cls: '', note: 'different measure: admissions, not a subset of the wait split' },
     { v: rec.dta != null ? C.fmt(rec.dta) : '—', k: 'waited on a trolley 12h+', cls: 'hot', note: 'after the decision to admit — drawn from the admissions pathway' }
@@ -492,7 +523,7 @@ function renderReport(code) {
     const pct = Math.round(1000 * rec.w4 / rec.att) / 10;
     headLabel = `ONE REPORTING MONTH · ${C.monthLabel(selPeriod).toUpperCase()} · NOT THE 12-MONTH AVERAGE`;
     tiles = [
-      { k: 'people arrived', v: C.fmt(rec.att),
+      { k: 'attendances', v: C.fmt(rec.att),
         x: perDay ? `${C.fmtShort(Math.round(rec.att / 30))} arrivals a day` : '', cls: '',
         explain: C.explainer('att', rec.att, { att: rec.att }) },
       { k: 'left within 4 hours', v: pct.toFixed(1) + '%',
@@ -622,7 +653,7 @@ function renderReport(code) {
     return `<div class="tr-ctx" role="group" aria-label="Performance context">
       ${seg('This period', ctx.perf)}
       ${seg(prevLbl, ctx.prev)}
-      ${seg('England · published', ctx.eng, dEng)}
+      ${seg(ctx.basis === 'month' ? 'England · that month' : 'England · rolling 12-mo avg', ctx.eng, dEng)}
       ${ctx.regN >= 3 ? seg('Region (' + ctx.regN + ' trusts)', ctx.reg, dReg) : ''}
       ${dPrev != null && Math.abs(dPrev) >= 0.05
         ? `<div class="tr-note">So 4-hour performance ${dPrev >= 0 ? 'improved' : 'declined'} by
@@ -722,7 +753,7 @@ function renderReport(code) {
     ${reg && reg.perf != null
       ? `Across its <b>${reg.n}</b> reporting trusts, ${t.region} averaged <b class="num">${reg.perf.toFixed(1)}%</b> within 4 hours
          over the same window. `
-      : ''}${eng.perf != null ? `England as a whole: <b class="num">${eng.perf.toFixed(1)}%</b>. ` : ''}
+      : ''}${eng.perf != null ? `England average · rolling 12 months: <b class="num">${eng.perf.toFixed(1)}%</b>. ` : ''}
     ${l12perf != null && reg && reg.perf != null
       ? l12perf >= reg.perf
         ? `So this trust performs <b>better than</b> its regional average.`
@@ -1074,7 +1105,8 @@ on((sel, hov, ev) => {
   lastPeriod = selPeriod;
   if (!sel) return;                 // panel always keeps the last report
 
-  syncHash();
+  userNavigating = true;
+  syncHash(!restoring);             // pick = new entry; restore = replace, keep forward stack
 
   trBody.hidden = false;
   const rep = document.getElementById('trust-report');
@@ -1089,8 +1121,17 @@ on((sel, hov, ev) => {
   // every selection — marker, list or link — flies the camera to the
   // trust's actual location and zooms in close enough to read it
   const g = C.GEO_BY_CODE.get(sel);
-  if (g) map.flyTo([g.lat, g.lon], Math.min(Math.max(map.getZoom(), 7.5), 9),
-    { duration: REDUCED ? 0 : .8 });
+  if (g) {
+    const hintEl = document.getElementById('map-hint');
+    if (hintEl) hintEl.textContent = 'locating ' + (C.BY_CODE.get(sel).name.split(' ')[0]) + '…';
+    requestAnimationFrame(() => {
+      map.invalidateSize();          // guard against stale size after layout shifts
+      map.flyTo([g.lat, g.lon], Math.min(Math.max(map.getZoom(), 7.5), 9),
+        { duration: REDUCED ? 0 : .8 });
+      setTimeout(() => { if (hintEl) hintEl.textContent =
+        'drag to pan · scroll to zoom · click a marker — markers show whole-trust totals at HQ postcodes'; }, REDUCED ? 0 : 900);
+    });
+  }
 });
 
 /* ---------- reset view ---------- */
@@ -1101,10 +1142,12 @@ document.getElementById('map-reset').addEventListener('click', () => {
 renderList('');
 updateMapAnalysis();
 
-// open with a story on screen: #CODE[@period] deep link wins, else Birmingham
+// open with a story on screen: #CODE[@period] deep link wins, else Birmingham.
+// Restore-first: this runs before any scroll logic and replaces — never pushes.
 const deep = C.parseHash();
 selPeriod = deep.period;
 select(deep.code || (C.BY_CODE.has('RRK') ? 'RRK' : P.find(p => p.att > 0).code));
+syncHash(false);
 
 // Leaflet initialised while the section may be display-blocked far below the
 // fold — re-measure once it actually scrolls into view.

@@ -24,7 +24,7 @@ document.documentElement.style.scrollBehavior=__sb||''}}catch(e){}</script>
 <style>
 :root{
   --bg:#07090e; --bg2:#0b0f17; --panel:#0d1220;
-  --ink:#e8edf6; --muted:#9aa7bd; --dim:#5c6a82;
+  --ink:#e8edf6; --muted:#9aa7bd; --dim:#75849e;
   --line:rgba(148,163,184,.14); --line2:rgba(148,163,184,.28);
   --accent:#5eead4; --warm:#fbbf24; --hot:#fb7185; --cool:#7dd3fc;
   --wash:7,9,14; --panel-wash:13,18,32; --mapbg:#0b1322;
@@ -35,7 +35,7 @@ document.documentElement.style.scrollBehavior=__sb||''}}catch(e){}</script>
 }
 html.light{
   --bg:#f2f5f7; --bg2:#e9edf1; --panel:#ffffff;
-  --ink:#16202e; --muted:#49596e; --dim:#6b7a90;
+  --ink:#16202e; --muted:#49596e; --dim:#5d6d83;
   --line:rgba(22,32,46,.15); --line2:rgba(22,32,46,.32);
   --accent:#0f766e; --warm:#b45309; --hot:#be123c; --cool:#0369a1;
   --wash:255,255,255; --panel-wash:255,255,255; --mapbg:#dde4e4;
@@ -532,6 +532,26 @@ html.light .tr-tip{background:#ffffff;color:#16202e;border-color:rgba(22,32,46,.
 .tr-unavailable{border:1px dashed var(--line2);border-radius:10px;padding:14px;color:var(--muted);
   font-size:13px;line-height:1.5}
 
+/* reduced motion: collapse every animation/transition to a blink */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important;
+  }
+}
+
+/* 5c. mobile touch targets ≥44px */
+@media (max-width:720px){
+  .t-item{min-height:44px}
+  .per-btn{width:44px;height:44px}
+  .map-reset{width:44px;height:44px;font-size:18px}
+  .seg button{min-height:44px}
+  .dl-btn,.bw-chip{min-height:44px}
+  .exp-btn{min-height:44px;padding:10px 12px}
+  #map-by{height:44px}
+  .leaflet-control-zoom a{width:36px!important;height:36px!important;line-height:36px!important}
+}
+
 /* responsive */
 @media (max-width:1080px){
   #trustmap .map-shell{grid-template-columns:270px 1fr;height:auto;min-height:560px}
@@ -758,7 +778,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     <p class="hero-kicker">NHS England · Accident &amp; Emergency · June 2015 – July 2026</p>
     <h1>Eleven years<br>in the <em>waiting room</em></h1>
     <p class="hero-sub"><strong>Every month, every hospital A&amp;E in England files a report:</strong> how many
-      people came, how many waited too long, and what happened next.
+      attendances happened, how many waited too long, and what happened next.
       This is that story — <strong>261,761,588 visits</strong> told in plain English.</p>
     <div class="gauge" id="hero-gauge">
       <div class="g-dial" aria-hidden="false">
@@ -800,7 +820,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       <h2 id="s1-h">Someone kept a receipt<br>for every A&amp;E visit in England.</h2>
       <p class="lede">Since 2015, NHS England has published one spreadsheet each month. Every hospital
         and walk-in centre in the country reports the same simple set of numbers:
-        how many people walked through the door, how long they waited, and how many were
+        how many attendances walked through the door, how long they waited, and how many were
         admitted as emergencies.</p>
       <p class="note">This website reads those receipts so you don't have to. Everything here comes from
         one cleaned table of <strong>28,212 monthly reports</strong> — after removing duplicates,
@@ -836,13 +856,13 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <span class="when num">JULY 2026 · ONE OF 28,212 REPORTS</span>
       </div>
       <div class="rec-grid">
-        <div class="rec-cell"><div class="rv num">48,103</div><div class="rk">people arrived</div></div>
+        <div class="rec-cell"><div class="rv num">48,103</div><div class="rk">attendances</div></div>
         <div class="rec-cell hl"><div class="rv num">71.0%</div><div class="rk">left within 4 hours</div></div>
         <div class="rec-cell bad"><div class="rv num">13,939</div><div class="rk">waited longer than 4h</div></div>
         <div class="rec-cell"><div class="rv num">18,275</div><div class="rk">admitted to a ward</div></div>
         <div class="rec-cell bad"><div class="rv num">2,187</div><div class="rk"><button class="gl" type="button" data-term="trolley">waited on a trolley 12h+</button> <strong>after</strong> admission was decided</div></div>
       </div>
-      <p class="rec-note">Read it like a person: <span class="say">“Nearly 50,000 people came to us in July.
+      <p class="rec-note">Read it like a person: <span class="say">“Nearly 50,000 attendances in July.
         Almost three in ten waited over four hours. And on 2,187 occasions, we had already decided to admit someone —
         but no bed existed, so they waited on a trolley for twelve hours or more.”</span></p>
     </div>
@@ -1019,7 +1039,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <!-- ══════════════════ SECTION 3 · EXPLORE IT YOURSELF ══════════════════ -->
 <section id="explore" class="sect" aria-labelledby="s3-h">
   <div class="wrap-narrow reveal">
-    <p class="sect-label">03 · Explore it yourself</p>
+    <p class="sect-label">06 · Explore it yourself</p>
     <h2 id="s3-h">Ask the data your own question.</h2>
     <p class="lede">Below are all <strong>204 NHS sites</strong> that reported in the last year. Each dot is one
       site's most recent twelve months: further right means busier, higher means shorter waits.</p>
@@ -1042,7 +1062,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       </div>
 
       <div class="chart-wrap" style="margin-top:24px"><svg id="scatter-chart" viewBox="0 0 1000 460" role="img"
-        aria-label="Scatter plot of NHS sites. Horizontal position shows how many people attended in the selected period; vertical position shows the share seen within four hours. The 95 percent target line crosses the top. Big hospitals cluster at high volume with lower performance; walk-in centres sit higher."></svg></div>
+        aria-label="Scatter plot of NHS sites. Horizontal position shows how many attendances were recorded in the selected period; vertical position shows the share seen within four hours. The 95 percent target line crosses the top. Big hospitals cluster at high volume with lower performance; walk-in centres sit higher."></svg></div>
 
       <div class="explorer-summary" id="ex-summary">
         Right now you're looking at <b>every reporting site over the last 12 months</b>.
@@ -1064,7 +1084,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <!-- ══════════════════ SECTION · TRUST MAP ══════════════════ -->
 <section id="trustmap" class="sect" aria-labelledby="s6-h">
   <div class="wrap-narrow reveal">
-    <p class="sect-label">06 · Explore the map</p>
+    <p class="sect-label">07 · Explore the map</p>
     <h2 id="s6-h">Find your hospital.<br>See its eleven years.</h2>
     <p class="lede">Every reporting NHS trust sits where it actually is — placed by its registered
       headquarters address. Drag to look around, scroll or pinch to zoom, hover for a summary,
@@ -1095,7 +1115,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
           <select id="map-by" aria-label="Colour the map by metric"></select>
         </div>
         <div class="map-legend" id="map-legend" aria-live="polite"></div>
-        <div class="map-hint" id="map-hint">drag to pan · scroll to zoom · click a marker</div>
+        <div class="map-hint" id="map-hint">drag to pan · scroll to zoom · click a marker — markers show whole-trust totals at HQ postcodes</div>
         <button class="map-reset" id="map-reset" title="Reset view" aria-label="Reset map view">⌂</button>
       </div>
 
@@ -1110,7 +1130,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <!-- ══════════════════ SECTION 4 · BIGGEST DISCOVERIES ══════════════════ -->
 <section id="discoveries" class="sect sect-alt" aria-labelledby="s4-h">
   <div class="wrap-narrow reveal">
-    <p class="sect-label">04 · The biggest discoveries</p>
+    <p class="sect-label">08 · The biggest discoveries</p>
     <h2 id="s4-h">Five things this data<br>will not let us forget.</h2>
   </div>
   <div class="wrap">
@@ -1136,7 +1156,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <div class="f-body">Over the full eleven years, <strong class="num">79.4%</strong> of visits with recorded
           waits ended within four hours. That sounds tolerable — until you divide:
           roughly <strong>one missed promise every four visits, forever</strong>. In the last twelve months,
-          <strong class="num">6.5 million</strong> people waited too long.
+          <strong class="num">6.5 million</strong> waits went past four hours.
           <span class="say">Each breach is not a statistic; it's someone's night in a corridor.</span></div>
         <div class="f-proof">
           <div class="fp"><div class="v num">43.7M</div><div class="k">total breaches since Apr 2017</div></div>
@@ -1194,12 +1214,12 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 <!-- ══════════════════ SECTION 5 · TAKEAWAYS ══════════════════ -->
 <section id="takeaways" class="sect" aria-labelledby="s5-h">
   <div class="wrap-narrow reveal">
-    <p class="sect-label">05 · What should we take away?</p>
+    <p class="sect-label">09 · What should we take away?</p>
     <h2 id="s5-h">If you remember three things…</h2>
     <div class="takeaways">
       <div class="take">
         <div class="t-k">The fact</div>
-        <div class="t-v">England's A&amp;Es treated <span class="num">261.8 million</span> people in eleven years —
+        <div class="t-v">England's A&amp;E doors handled <span class="num">261.8 million</span> attendances in eleven years —
           and the share seen quickly fell from ~90% to ~75% and has never recovered.</div>
       </div>
       <div class="take">
