@@ -50,9 +50,8 @@ window.addEventListener('hashchange', () => {
   const codeChanged = !!req.code && req.code !== selected;
   const periodChanged = (req.period || null) !== selPeriod;
   if (!codeChanged && !periodChanged) return;      // plain section anchors fall through
-  selPeriod = req.period || null;
-  if (codeChanged) { interacted = true; select(req.code); }
-  else emit('period');
+  if (codeChanged) { selPeriod = req.period || null; interacted = true; select(req.code); }
+  else setPeriod(req.period || null);
 });
 
 /* ---------- trust list (sidebar search) ---------- */
@@ -256,6 +255,28 @@ function refreshTooltips() {
     m.setTooltipContent ? m.setTooltipContent(markerTooltipHtml(code)) : null);
 }
 
+/* legend + colours + tooltips all depend on (mapMetric, selPeriod):
+   repaint them together, and only when one of the two actually moved */
+let analysisKey;
+function updateMapAnalysis() {
+  const key = mapMetric + '@' + (selPeriod || 'latest');
+  if (key === analysisKey) return;
+  analysisKey = key;
+  renderLegend();
+  applyMarkerStates();
+  refreshTooltips();
+}
+
+/* the one mutation point for the reporting period: URL, map analysis and
+   the report panel always move together */
+function setPeriod(p) {
+  if (selPeriod === p) return;
+  selPeriod = p;
+  syncHash();
+  updateMapAnalysis();
+  if (selected) renderReport(selected);
+}
+
 if (mapByEl) {
   Object.keys(C.MAP_METRICS).forEach(k => {
     const o = document.createElement('option');
@@ -264,9 +285,7 @@ if (mapByEl) {
   });
   mapByEl.addEventListener('change', () => {
     mapMetric = mapByEl.value;
-    renderLegend();
-    applyMarkerStates();
-    refreshTooltips();
+    updateMapAnalysis();
   });
 }
 
@@ -797,17 +816,20 @@ function renderReport(code) {
   if (nextB) nextB.addEventListener('click', () => stepPeriod(+1));
   const range = document.getElementById('per-range');
   if (range) {
-    let raf = null;
-    range.addEventListener('input', () => {          // drag through history
-      if (raf) return;                               // one re-render per frame max
-      raf = requestAnimationFrame(() => {
-        raf = null;
-        const v = +range.value;
-        interacted = true;
-        selPeriod = v === range.max ? null : C.PERIODS[v];   // right end = latest
-        syncHash();
-        renderReport(selected);
-      });
+    const maxV = +range.max;
+    const labelFor = v => v >= maxV ? 'Latest · ' + C.monthLabel(C.LAST_YM)
+                                   : C.monthLabel(C.PERIODS[v]);
+    const lab = trBody.querySelector('.per-label');
+    // while dragging: live-preview the label only — the heavy panel rebuild
+    // waits for release, so the thumb never loses its drag
+    range.addEventListener('input', () => {
+      const txt = labelFor(+range.value);
+      if (lab) lab.textContent = txt;
+      range.setAttribute('aria-valuetext', txt);
+    });
+    range.addEventListener('change', () => {         // commit on release / arrow key
+      interacted = true;
+      setPeriod(+range.value >= maxV ? null : C.PERIODS[+range.value]);
     });
     range.addEventListener('keydown', ev => ev.stopPropagation()); // arrows move the timeline, not the page
   }
@@ -865,8 +887,7 @@ function renderReport(code) {
       c.addEventListener('pointerleave', hideTip);
       c.addEventListener('click', () => {                       // pin the period
         interacted = true;
-        selPeriod = (selPeriod === c.dataset.ym) ? null : c.dataset.ym;
-        syncHash(); renderReport(selected);
+        setPeriod((selPeriod === c.dataset.ym) ? null : c.dataset.ym);
       });
     });
     wrapEl.addEventListener('pointerleave', hideTip);
@@ -879,18 +900,14 @@ function stepPeriod(dir) {
   const idx = C.PERIODS.indexOf(selPeriod || C.LAST_YM);
   const next = C.PERIODS[idx + dir];
   if (!next && !(dir > 0 && selPeriod)) return;
-  selPeriod = dir > 0 ? (idx === C.PERIODS.length - 1 ? null : next) : next;
-  syncHash();
-  renderReport(selected);
+  setPeriod(dir > 0 ? (idx === C.PERIODS.length - 1 ? null : next) : next);
 }
 
 /* open an exact reporting period (best/worst chips, heatmap cells) */
 function gotoPeriod(ym) {
   if (!C.PERIODS.includes(ym)) return;
   interacted = true;
-  selPeriod = ym === C.LAST_YM ? null : ym;
-  syncHash();
-  renderReport(selected);
+  setPeriod(ym === C.LAST_YM ? null : ym);
 }
 
 /* ───────────── shareable trust report card (PNG, client-side) ─────────────
@@ -1022,6 +1039,8 @@ function renderShareCard(code, done) {
 /* ---------- wire the store ---------- */
 let lastSel = null, lastPeriod = null;
 on((sel, hov, ev) => {
+  // map legend/tooltips must match the current (metric, period) pair
+  updateMapAnalysis();
   // cheap visual states react to every emit (hover included)
   listEl.querySelectorAll('.t-item').forEach(b => {
     const on_ = b.dataset.code === sel;
@@ -1065,8 +1084,7 @@ document.getElementById('map-reset').addEventListener('click', () => {
 });
 
 renderList('');
-renderLegend();
-applyMarkerStates();
+updateMapAnalysis();
 
 // open with a story on screen: #CODE[@period] deep link wins, else Birmingham
 const deep = C.parseHash();
