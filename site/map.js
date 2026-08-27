@@ -88,8 +88,6 @@ window.addEventListener('popstate', e => {
 const listEl = document.getElementById('trust-list');
 const searchEl = document.getElementById('trust-search');
 const countEl = document.getElementById('trust-count');
-const tablePanel = document.getElementById('trust-table-panel');
-const tableToggle = document.getElementById('trust-table-toggle');
 const mapStatus = document.getElementById('map-status');
 countEl.textContent = `(${P.filter(p => p.att > 0).length})`;
 
@@ -98,32 +96,12 @@ function perfLabel(t) {
   const pct = Math.round(100 * t.w4 / t.attCov);
   return `${pct}% within 4h`;
 }
-function renderTable(filter) {
-  if (!tablePanel) return;
-  const q = (filter || '').trim().toLowerCase();
-  const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q))
-    && (!regionFilter || p.region === regionFilter) && p.att > 0);
-  tablePanel.innerHTML = `<table><caption>Trusts matching this search (${rows.length})</caption>
-    <thead><tr><th scope="col">Trust</th><th scope="col">Region</th><th scope="col">Attendances</th>
-    <th scope="col">Within 4 hours</th><th scope="col">Action</th></tr></thead><tbody>${
-      rows.map(p => {
-        const t = C.BY_CODE.get(p[0]);
-        return `<tr><th scope="row">${p[1]}<br><small>${p[0]}</small></th>
-          <td>${t.region || 'Not available'}</td><td class="num">${C.fmtShort(p[3])}</td>
-          <td>${perfLabel(t)}</td><td><button type="button" data-table-code="${p[0]}">Open report</button></td></tr>`;
-      }).join('')}</tbody></table>`;
-  tablePanel.querySelectorAll('[data-table-code]').forEach(button => button.addEventListener('click', () => {
-    interacted = true;
-    select(button.dataset.tableCode);
-  }));
-}
 function renderList(filter) {
   const q = (filter || '').trim().toLowerCase();
   const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q))
     && (!regionFilter || p.region === regionFilter) && p.att > 0);
   if (!rows.length) {
     listEl.innerHTML = '<li class="no-match">No trusts match that search.</li>';
-    renderTable(filter);
     return;
   }
   const frag = document.createDocumentFragment();
@@ -143,17 +121,6 @@ function renderList(filter) {
   });
   listEl.innerHTML = '';
   listEl.appendChild(frag);
-  renderTable(filter);
-}
-
-if (tableToggle && tablePanel) {
-  tableToggle.addEventListener('click', () => {
-    const open = tablePanel.hidden;
-    tablePanel.hidden = !open;
-    tableToggle.setAttribute('aria-expanded', String(open));
-    tableToggle.textContent = open ? 'Hide trusts table' : 'View trusts as a table';
-    if (open) renderTable(searchEl.value);
-  });
 }
 
 /* ── regional map filter ── */

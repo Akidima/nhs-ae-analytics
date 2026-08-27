@@ -886,21 +886,10 @@ html:not(.light) #theme-toggle{display:block!important;color:#fff;border-color:#
 html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;background:#005eb8}
 .site-nav{display:flex;gap:20px;margin-left:auto;align-items:center}
 .site-nav a{color:#fff!important;font-size:16px;text-decoration:underline}
-.trust-table-toggle{margin-top:15px;width:100%;font-size:16px!important}
-.trust-table-panel{margin-top:25px;border:1px solid #768692;background:#fff;overflow-x:auto;padding:20px}
-.trust-table-panel table{border-collapse:collapse;width:100%;font-size:16px}
-.trust-table-panel caption{text-align:left;font-weight:700;font-size:22px;margin-bottom:15px}
-.trust-table-panel th,.trust-table-panel td{padding:10px 12px;border-bottom:1px solid #768692;text-align:left;vertical-align:top}
-.trust-table-panel th{background:#e8edee;font-weight:700}
-.trust-table-panel button{background:none;border:0;color:#005eb8;text-decoration:underline;font:inherit;text-align:left;padding:0;cursor:pointer}
 .metric-provenance{border-left:4px solid #005eb8;background:#e8edee;color:#231f20;padding:12px 15px;margin:15px 0;font-size:16px;line-height:1.45}
 .metric-provenance strong{font-weight:700}
 .map-status{position:absolute;left:15px;right:15px;top:75px;z-index:501;background:#fff;border:4px solid #003087;color:#231f20;padding:12px;font-size:16px;line-height:1.4}
 html:not(.light) .site-nav a{color:#fff!important}
-html:not(.light) .trust-table-panel{background:#231f20;color:#fff;border-color:#768692}
-html:not(.light) .trust-table-panel th{background:#425563;color:#fff}
-html:not(.light) .trust-table-panel th,html:not(.light) .trust-table-panel td{border-color:#768692}
-html:not(.light) .trust-table-panel button{color:#41b6e6}
 html:not(.light) .metric-provenance{background:#425563;color:#fff;border-color:#41b6e6}
 html:not(.light) .map-status{background:#231f20;color:#fff;border-color:#41b6e6}
 @media (max-width:760px){.site-nav{gap:8px}.site-nav a{font-size:14px}.brand-title{display:none}}
@@ -1283,8 +1272,6 @@ html:not(.light) .site-head{background:rgba(var(--wash),.82)!important;border-bo
         <ul class="trust-list" id="trust-list" role="listbox" aria-label="NHS trusts">
           <!-- populated by script -->
         </ul>
-        <button class="nhsuk-button trust-table-toggle" id="trust-table-toggle" type="button"
-          aria-expanded="false" aria-controls="trust-table-panel">View trusts as a table</button>
       </div>
 
       <!-- middle: Leaflet map -->
@@ -1306,7 +1293,6 @@ html:not(.light) .site-head{background:rgba(var(--wash),.82)!important;border-bo
         <div class="tr-body" id="tr-body"></div>
       </aside>
     </div>
-    <div id="trust-table-panel" class="trust-table-panel" hidden aria-live="polite"></div>
   </div>
 </section>
 
