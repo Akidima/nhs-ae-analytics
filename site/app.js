@@ -183,7 +183,7 @@ function hideTip() { tip.classList.remove('on'); }
     if (last != null) phase = (phase + Math.min(ts - last, 60) / 1000 * SPEED) % PERIOD;
     last = ts;
     ctx.clearRect(0, 0, W, H);
-    ctx.strokeStyle = (rootStyle.getPropertyValue('--accent') || '#5eead4').trim();
+    ctx.strokeStyle = (rootStyle.getPropertyValue('--accent') || '#005EB8').trim();
     ctx.lineWidth = 1.6 * devicePixelRatio;
     ctx.globalAlpha = .3;
     ctx.beginPath();
@@ -452,7 +452,7 @@ function hideTip() { tip.classList.remove('on'); }
       `${monthName(d.ym)}: ${d.perf.toFixed(1)} percent seen within four hours` +
       (d.breaches != null ? `, ${(d.ac - d.w).toLocaleString('en-GB')} waited longer` : ''));
     const activate = ev => {
-      dot.setAttribute('r', 5.5); dot.setAttribute('fill', '#fff');
+      dot.setAttribute('r', 5.5); dot.setAttribute('fill', '#FFFFFF');
       dot.setAttribute('cx', x(d.i)); dot.setAttribute('cy', y(d.perf));
       g.appendChild(dot);
       const r = hit.getBoundingClientRect();
@@ -704,15 +704,10 @@ function hideTip() { tip.classList.remove('on'); }
   data.forEach(d => {
     if (d.d == null) return;
     const b = svgEl('rect', { x: x(d.j) - bw / 2, y: y(d.d), width: bw, height: m.t + ih - y(d.d),
-      rx: 1.5, fill: d.d > 40000 ? 'url(#trolley-hot)' : 'rgba(251,113,133,.55)' }, svg);
+      fill: d.d > 40000 ? '#003087' : '#005EB8' }, svg);
     b.dataset.ym = d.ym; b.dataset.d = d.d;
     bars.push(b);
   });
-  const defs = svgEl('defs', {}, svg);
-  const grad = svgEl('linearGradient', { id: 'trolley-hot', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-  svgEl('stop', { offset: '0%', 'stop-color': '#fb7185' }, grad);
-  svgEl('stop', { offset: '100%', 'stop-color': '#be123c' }, grad);
-
   // incomplete-month markers (Dec-25 hole etc.) — never rendered as zero bars
   (window.__aeIncompleteMonths || []).forEach(ym => {
     if (ym < '2017-01') return;
@@ -783,7 +778,7 @@ function hideTip() { tip.classList.remove('on'); }
   idx.forEach((v, i) => {
     const bw = iw / 12 * .52;
     svgEl('rect', { x: x(i) - bw / 2, y: yI(v), width: bw, height: m.t + ih - yI(v),
-      rx: 2.5, fill: 'rgba(125,211,252,.16)', stroke: 'rgba(125,211,252,.5)', 'stroke-width': 1 }, svg);
+      fill: '#E8EDEE', stroke: '#41B6E6', 'stroke-width': 1 }, svg);
   });
   let dstr = '';
   perf.forEach((v, i) => { dstr += (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + yP(v).toFixed(1); });
@@ -1135,4 +1130,3 @@ function hideTip() { tip.classList.remove('on'); }
 })();
 
 })();
-

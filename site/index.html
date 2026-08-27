@@ -8,11 +8,10 @@
 <link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossorigin>
 <link rel="preload" as="style" href="vendor/leaflet.css">
 <link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nhsuk-frontend@9.0.0/dist/nhsuk-frontend.min.css">
 <title>Eleven Years in the Waiting Room — the NHS A&E story in data</title>
 <script>/* apply saved/system theme before first paint */
-try{var t=localStorage.getItem('ae-theme');var sys=matchMedia('(prefers-color-scheme: light)').matches;
-if(t==='light'||(!t&&sys))document.documentElement.classList.add('light')
-else document.documentElement.classList.remove('light')}catch(e){}</script>
+try{document.documentElement.classList.add('light')}catch(e){}</script>
 <script>/* fresh visits/reloads start at the hero — before anything paints.
    Trust hashes (#RRK) match no element id, so only real section anchors
    keep their native jump; manual restoration stops the UA mid-page reset */
@@ -23,24 +22,17 @@ document.documentElement.style.scrollBehavior='auto';scrollTo(0,0);
 document.documentElement.style.scrollBehavior=__sb||''}}catch(e){}</script>
 <style>
 :root{
-  --bg:#07090e; --bg2:#0b0f17; --panel:#0d1220;
-  --ink:#e8edf6; --muted:#9aa7bd; --dim:#75849e;
-  --line:rgba(148,163,184,.14); --line2:rgba(148,163,184,.28);
-  --accent:#5eead4; --warm:#fbbf24; --hot:#fb7185; --cool:#7dd3fc;
-  --wash:7,9,14; --panel-wash:13,18,32; --mapbg:#0b1322;
-  --dot-rgb:94,234,212; --dotwarm-rgb:251,191,36;
-  --serif:Georgia,'Times New Roman',serif;
-  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --bg:#ffffff; --bg2:#e8edee; --panel:#ffffff;
+  --ink:#231f20; --muted:#425563; --dim:#768692;
+  --line:#e8edee; --line2:#768692;
+  --accent:#005eb8; --warm:#41b6e6; --hot:#003087; --cool:#009639;
+  --wash:255,255,255; --panel-wash:255,255,255; --mapbg:#e8edee;
+  --dot-rgb:0,94,184; --dotwarm-rgb:65,182,230;
+  --serif:Arial,sans-serif;
+  --sans:Arial,sans-serif;
   --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
 }
-html.light{
-  --bg:#f2f5f7; --bg2:#e9edf1; --panel:#ffffff;
-  --ink:#16202e; --muted:#49596e; --dim:#5d6d83;
-  --line:rgba(22,32,46,.15); --line2:rgba(22,32,46,.32);
-  --accent:#0f766e; --warm:#b45309; --hot:#be123c; --cool:#0369a1;
-  --wash:255,255,255; --panel-wash:255,255,255; --mapbg:#dde4e4;
-  --dot-rgb:13,148,136; --dotwarm-rgb:180,83,9;
-}
+html.light{--bg:#ffffff;--bg2:#e8edee;--panel:#ffffff;--ink:#231f20;--muted:#425563;--dim:#768692;--line:#e8edee;--line2:#768692;--accent:#005eb8;--warm:#41b6e6;--hot:#003087;--cool:#009639;--wash:255,255,255;--panel-wash:255,255,255;--mapbg:#e8edee;--dot-rgb:0,94,184;--dotwarm-rgb:65,182,230}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
@@ -337,7 +329,7 @@ html.light .site-head{background:rgba(255,255,255,.85)}
   padding:clamp(22px,3.4vw,34px);display:grid;grid-template-columns:52px 1fr;gap:8px 22px;position:relative;overflow:hidden}
 .finding::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.7}
 .finding.f2::before{background:var(--cool)} .finding.f3::before{background:var(--warm)}
-.finding.f4::before{background:var(--hot)} .finding.f5::before{background:#a78bfa}
+.finding.f4::before{background:var(--hot)} .finding.f5::before{background:var(--hot)}
 .finding .f-num{font-family:var(--serif);font-size:30px;color:var(--dim);grid-row:1/3;line-height:1;padding-top:4px}
 .finding h3{grid-column:2}
 .finding .f-body{grid-column:2;font-size:15px;color:var(--muted)}
@@ -674,7 +666,7 @@ html.light .tr-tip{background:#ffffff;color:#16202e;border-color:rgba(22,32,46,.
   border:1px solid var(--line);overflow:hidden}
 .mb-bar{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
 .hue0{background:var(--accent)} .hue1{background:var(--cool)} .hue2{background:var(--warm)}
-.hue3{background:#a78bfa}
+.hue3{background:#003087}
 .mb-v{text-align:right;color:var(--ink)}
 .x-note{display:block;margin-top:8px;font-size:10.5px;color:var(--dim)}
 
@@ -799,12 +791,54 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .tr-name{color:#111}.tr-window,.tr-metric .k{color:#444}
 }
 
+/* NHS.UK visual baseline: flat, spacious, left aligned and keyboard-visible. */
+body{background:#fff;color:#231f20;font-family:Arial,sans-serif;font-size:19px;line-height:1.5;text-align:left}
+h1{font-family:Arial,sans-serif;font-size:48px;font-weight:700;line-height:1.1;letter-spacing:0;max-width:18ch}
+h2{font-family:Arial,sans-serif;font-size:32px;font-weight:700;line-height:1.2;letter-spacing:0}
+h3{font-size:24px;font-weight:700}
+.wrap,.wrap-narrow{margin-left:auto;margin-right:auto}
+:focus-visible{outline:3px solid #ffeb3b!important;outline-offset:2px;border-radius:0!important}
+*,*::before,*::after{border-radius:0!important;box-shadow:none!important;transition:none!important;animation:none!important}
+*{background-image:none!important}
+.site-head{height:64px;background:#005eb8!important;border-bottom:10px solid #003087}
+.site-head-row{max-width:960px}
+.brand,.brand-title,.brand-title b{color:#fff!important}
+.nhs-lozenge rect{fill:#fff!important}.nhs-lozenge text{fill:#005eb8!important}
+.sect-alt,#method{background:#e8edee!important}
+.def,.record,.viz,.finding,.explorer-controls,.caveats,.s-call,.tr-metric,.tr-stat,.j-step,.f-proof .fp{background:#fff!important;border:1px solid #768692!important}
+.def,.record,.viz,.finding,.explorer-controls,.caveats{padding:25px}
+a,.linklike,.gl{color:#005eb8!important}
+.sect-label,.hero-kicker,.method-grid h4{color:#005eb8!important}
+.hero-sub,.lede,.note,.chart-note,.f-body,.tr-note,.method-grid p,.method-grid li{color:#425563!important}
+.hero-kicker::before,.sect-label::after{background:#005eb8!important}
+.gauge{border:1px solid #768692!important;background:#fff!important}
+.g-track{stroke:#e8edee!important}.g-val{stroke:#005eb8!important}.g-target{stroke:#41b6e6!important}
+.g-num,.hstat .v,.big-stat .v,.tr-name,.record-head .who{color:#231f20!important}
+.callout,.callout.warn,.callout.hot,.callout.nhsuk-notification-banner{display:block;border:4px solid #005eb8!important;background:#e8edee!important;color:#231f20!important;border-radius:0!important;padding:20px!important}
+.callout.hot{border-left-color:#003087!important}.callout.warn{border-left-color:#41b6e6!important}
+.nhsuk-button,.dl-btn{background:#005eb8!important;border:0!important;color:#fff!important;min-height:44px;padding:12px 20px!important;text-decoration:none}
+.nhsuk-button:hover,.dl-btn:hover{background:#003087!important;color:#fff!important}
+.seg button[aria-pressed="true"],.bt-btn.on{background:#005eb8!important;border-color:#005eb8!important;color:#fff!important}
+.seg button,.bt-btn,.map-reset,.per-btn,.bw-chip{border:2px solid #005eb8!important;color:#005eb8!important;background:#fff!important}
+input,select{border:2px solid #425563!important;background:#fff!important;color:#231f20!important;border-radius:0!important}
+.trust-side,.trust-report{background:#fff!important}.t-item{border:1px solid #768692!important;color:#231f20!important}.t-item.sel{background:#e8edee!important;border-color:#005eb8!important}
+.map-stage,#ukmap{background:#e8edee!important}.map-by,.map-legend{background:#fff!important;border:1px solid #768692!important}
+.tr-stat.good,.tr-stat.hot,.dq.ok,.dq.warn{border-color:#009639!important}.tr-stat.good .v,.dq.ok{color:#009639!important}.tr-stat.hot .v,.dq.warn{color:#003087!important}
+.hot,.cool,.warm{color:#003087!important}
+.hm-cell.b95,.hm-cell.b80,.hm-cell.b70,.hm-cell.b60,.hm-cell.bx{background:#005eb8!important}.hm-cell.miss{background:#e8edee!important}
+.hero-caveat{border-left-color:#41b6e6!important;color:#425563!important}
+#hero-canvas,#ecg-canvas,#glow,#theme-toggle{display:none!important}
+#ticker{background:#e8edee!important;border-color:#768692!important}
+.tick-item,.hstat .k,.fact-tag,.note,.dl-note{color:#425563!important}
+.finding::before{background:#005eb8!important}.finding.f2::before,.finding.f3::before,.finding.f4::before,.finding.f5::before{background:#003087!important}
+.method-grid h4{font-family:Arial,sans-serif;font-size:19px;letter-spacing:0;text-transform:none}
+@media (max-width:640px){body{font-size:16px}h1{font-size:36px}h2{font-size:28px}h3{font-size:22px}}
 </style>
 </head>
 <body>
 <div id="progress" role="presentation"></div>
-<header class="site-head">
-  <div class="site-head-row">
+<header class="site-head nhsuk-header">
+  <div class="site-head-row nhsuk-header__container nhsuk-width-container">
     <a class="brand" href="#hero" aria-label="NHS — back to top">
       <svg class="nhs-lozenge" width="60" height="24" viewBox="0 0 60 24" role="img" aria-label="NHS">
         <rect width="60" height="24" rx="3" fill="#005EB8"/>
@@ -813,7 +847,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       </svg>
       <span class="brand-title"><b>A&amp;E</b> · eleven years in the waiting room</span>
     </a>
-    <button id="theme-toggle" type="button" aria-label="Switch theme"></button>
+    <button id="theme-toggle" type="button" aria-label="Switch theme" hidden></button>
   </div>
 </header>
 <div id="glow" role="presentation"></div>
@@ -880,27 +914,27 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     </div>
 
     <div class="defs reveal">
-      <div class="def"><span class="glyph" style="color:var(--accent)">🚶</span>
+       <div class="def nhsuk-card"><span class="glyph" aria-hidden="true"></span>
         <h4>Attendances</h4>
         <p>People who arrived at an A&amp;E or urgent care centre. Any arrival counts — by ambulance, by taxi, or on foot.</p>
         <span class="ex">261.8 million over 11 years</span></div>
-      <div class="def"><span class="glyph" style="color:var(--warm)">⏱️</span>
+       <div class="def nhsuk-card"><span class="glyph" aria-hidden="true"></span>
         <h4>The 4-hour promise</h4>
         <p>NHS standards say you should be seen, treated, admitted or sent home within four hours of arriving.</p>
         <span class="ex">The central rule of this data</span></div>
-      <div class="def"><span class="glyph" style="color:var(--hot)">🚫</span>
+       <div class="def nhsuk-card"><span class="glyph" aria-hidden="true"></span>
         <h4>Breaches</h4>
         <p>Visits that broke the 4-hour promise — the patient waited longer than four hours before their wait ended.</p>
         <span class="ex">43.7 million breaches since 2017</span></div>
-      <div class="def"><span class="glyph" style="color:var(--cool)">🏥</span>
+       <div class="def nhsuk-card"><span class="glyph" aria-hidden="true"></span>
         <h4>Emergency admissions</h4>
         <p>Patients who were kept in hospital rather than sent home — about one visit in four ends this way.</p>
         <span class="ex">65.3 million admissions</span></div>
-      <div class="def"><span class="glyph" style="color:var(--accent)">🏛️</span>
+       <div class="def nhsuk-card"><span class="glyph" aria-hidden="true"></span>
         <h4>NHS Trust</h4>
         <p>The legal organisation — often running several hospitals and departments under one name and one monthly return.</p>
         <span class="ex">e.g. “University Hospitals Birmingham NHS Foundation Trust”</span></div>
-      <div class="def"><span class="glyph" style="color:var(--warm)">🚪</span>
+       <div class="def nhsuk-card"><span class="glyph" aria-hidden="true"></span>
         <h4>Reporting site</h4>
         <p>An individual A&amp;E department filing its own numbers inside that trust. One trust can contain many sites.</p>
         <span class="ex">Map markers show whole-trust totals, placed at HQ postcodes — not individual sites</span></div>
@@ -930,21 +964,21 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     <p class="fact-tag" style="margin-top:44px"><span class="dot" style="background:var(--cool)"></span>The three kinds of front door</p>
     <div class="doors" role="tablist" aria-label="Types of emergency department">
       <button class="door major sel" role="tab" aria-selected="true" data-door="major" id="door-major">
-        <span class="d-glyph" style="color:var(--accent)">🏥</span>
+        <span class="d-glyph" aria-hidden="true"></span>
         <h4>Type 1 — Consultant-led A&amp;E</h4>
         <span class="d-k">the classic hospital emergency department</span>
         <div class="d-share num">63.9<span class="u">% of visits</span></div>
         <p class="d-perf">Last 12 months, <b class="num">61%</b> were seen within 4 hours.</p>
       </button>
       <button class="door walkin" role="tab" aria-selected="false" data-door="walkin" id="door-walkin">
-        <span class="d-glyph" style="color:var(--cool)">🚪</span>
+        <span class="d-glyph" aria-hidden="true"></span>
         <h4>Type 3 — Walk-in &amp; urgent care</h4>
         <span class="d-k">minor injuries, no appointment needed</span>
         <div class="d-share num">33.8<span class="u">% of visits</span></div>
         <p class="d-perf">Last 12 months, <b class="num">96.9%</b> were seen within 4 hours.</p>
       </button>
       <button class="door other" role="tab" aria-selected="false" data-door="other" id="door-other">
-        <span class="d-glyph" style="color:var(--dim)">🛏️</span>
+        <span class="d-glyph" aria-hidden="true"></span>
         <h4>Type 2 — Single speciality</h4>
         <span class="d-k">e.g. eye casualty · rare and small</span>
         <div class="d-share num">2.2<span class="u">% of visits</span></div>
@@ -984,8 +1018,8 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       </div>
       <div class="chart-wrap"><svg id="slide-chart" viewBox="0 0 1000 430" role="img"
         aria-label="Line chart of national monthly 4-hour performance from 2015 to 2026. England touched the 95 percent target once, in July 2015, then slid through the low nineties and high eighties. Performance fell to a low near 69 percent in late 2022 before recovering only partway, to about 75 percent by July 2026."></svg></div>
-      <div class="callout warn">⚠ In eleven years, exactly <b class="num">&nbsp;one&nbsp;</b> month met the 95% promise —
-        July 2015. There hasn't been another since.</div>
+       <div class="callout warn nhsuk-notification-banner" role="status"><span class="nhsuk-notification-banner__heading">In eleven years, exactly <b class="num">&nbsp;one&nbsp;</b> month met the 95% promise —
+         July 2015. There hasn't been another since.</span></div>
       <p class="chart-note"><span class="say">What changed:</span> England came close year after year —
         <strong class="num">90.8%</strong> in June 2018, mid-80s in good winters — but never crossed the line again.
         Then the floor gave way: performance bottomed at <strong class="num">69.0%</strong> in November 2022, meaning
@@ -1039,7 +1073,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
           <div class="viz-sub">Occasions per month when an admitted patient waited 12 hours or more in A&amp;E for a ward bed.</div>
         </div>
         <div class="trolley-legend">
-          <span class="li"><span class="bar-sw" style="background:linear-gradient(var(--hot),#be123c)"></span>12-hour trolley waits</span>
+           <span class="li"><span class="bar-sw" style="background:var(--hot)"></span>12-hour trolley waits</span>
         </div>
       </div>
       <div class="chart-wrap"><svg id="trolley-chart" viewBox="0 0 1000 360" role="img"
@@ -1160,9 +1194,9 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       <!-- left: searchable trust list -->
       <div class="trust-side">
         <label class="side-label" for="trust-search">All trusts <span class="side-count num" id="trust-count"></span></label>
-        <input type="search" id="trust-search" class="trust-search" placeholder="Search trusts…"
+         <input type="search" id="trust-search" class="trust-search nhsuk-input" placeholder="Search trusts…"
           autocomplete="off" aria-describedby="trust-count">
-        <select id="region-filter" class="trust-search region-select"
+         <select id="region-filter" class="trust-search nhsuk-select region-select"
           aria-label="Filter trusts by NHS region">
           <option value="">All regions</option>
         </select>
@@ -1177,7 +1211,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
           aria-label="Interactive map of the UK showing NHS trusts. Use the list beside the map to select a trust."></div>
         <div class="map-by">
           <label class="map-by-label" for="map-by">Map by</label>
-          <select id="map-by" aria-label="Colour the map by metric"></select>
+         <select id="map-by" class="nhsuk-select" aria-label="Colour the map by metric"></select>
         </div>
         <div class="map-legend" id="map-legend" aria-live="polite"></div>
         <div class="map-hint" id="map-hint">drag to pan · scroll to zoom · click a marker — markers show whole-trust totals at HQ postcodes</div>
@@ -1320,7 +1354,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 </section>
 
 <!-- ══════════════════ METHOD ══════════════════ -->
-<section id="method" aria-labelledby="m-h">
+<footer id="method" class="nhsuk-footer" aria-labelledby="m-h">
   <div class="wrap">
     <p class="sect-label">Where this comes from</p>
     <div class="method-grid">
@@ -1358,10 +1392,10 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
         <p>The same cleaned tables this page is built from — free to reuse under the
           Open Government Licence v3 with attribution.</p>
         <div class="dl-row">
-          <button class="dl-btn" id="dl-nat-csv" type="button">⬇ national · CSV</button>
-          <button class="dl-btn" id="dl-prov-csv" type="button">⬇ trusts (12m) · CSV</button>
-          <button class="dl-btn" id="dl-json" type="button">⬇ everything · JSON</button>
-          <a class="dl-btn" href="data/national-summary.csv" download>⬇ national summary · CSV</a>
+           <button class="dl-btn nhsuk-button" id="dl-nat-csv" type="button">national · CSV</button>
+           <button class="dl-btn nhsuk-button" id="dl-prov-csv" type="button">trusts (12m) · CSV</button>
+           <button class="dl-btn nhsuk-button" id="dl-json" type="button">everything · JSON</button>
+           <a class="dl-btn nhsuk-button" href="data/national-summary.csv" download>national summary · CSV</a>
         </div>
         <p class="dl-note">Contains public sector information licensed under the
           <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" rel="license">Open
@@ -1374,7 +1408,7 @@ button.hm-cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
       <span>Data © NHS England · OGL v3</span>
     </div>
   </div>
-</section>
+</footer>
 
 </main>
 

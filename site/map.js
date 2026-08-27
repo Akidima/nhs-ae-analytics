@@ -215,9 +215,9 @@ const HOME = { center: map.getCenter(), zoom: map.getZoom() };
 let mapMetric = 'type';               // current "Map by" selection
 function markerColors() {
   const cs = getComputedStyle(document.documentElement);
-  return { accent: cs.getPropertyValue('--accent').trim() || '#5eead4',
-           cool: cs.getPropertyValue('--cool').trim() || '#7dd3fc',
-           hot: cs.getPropertyValue('--hot').trim() || '#fb7185' };
+  return { accent: cs.getPropertyValue('--accent').trim() || '#005EB8',
+           cool: cs.getPropertyValue('--cool').trim() || '#009639',
+           hot: cs.getPropertyValue('--hot').trim() || '#003087' };
 }
 const markersByCode = new Map();
 
@@ -250,8 +250,8 @@ function markerTooltipHtml(code) {
      <div class="mt-sub">${C.fmtShort(t.att)} visits${t.attCov ? ' · ' + perfLabel(t) : ''}${t.monthsTag}</div>
      ${metricLine ? `<div class="mt-sub">${metricLine}</div>` : ''}
      <div class="mt-sub">${t.kind === 'major' ? 'big A&amp;E hospital' : t.kind === 'walkin' ? 'walk-in / community sites' : 'single-speciality site'}${g.src === 'approx' ? ' · <b>≈</b> region-level position' : ''}</div>
-     ${g.src === 'ods' ? '<div class="mt-sub" style="color:#5c6a82">whole-trust total · placed at registered HQ</div>' : ''}
-     <div class="mt-sub" style="margin-top:3px;color:#5c6a82">click for full report</div>`;
+      ${g.src === 'ods' ? '<div class="mt-sub" style="color:#768692">whole-trust total · placed at registered HQ</div>' : ''}
+      <div class="mt-sub" style="margin-top:3px;color:#768692">click for full report</div>`;
 }
 
 /* ---------- Map-by control (analytical colouring) ---------- */
@@ -297,7 +297,7 @@ function applyMarkerStates() {
     const base = Math.min(11, t.kind === 'major' ? 4 + Math.sqrt(t.att) / 260 : 3);
     let color;
     if (mapMetric === 'type') color = t.kind === 'major' ? Cs.accent : Cs.cool;
-    else color = C.mapMetricColor(mapMetric, code, selPeriod) || '#475569';
+    else color = C.mapMetricColor(mapMetric, code, selPeriod) || '#768692';
     m.setStyle({
       radius: base + (isSel ? 4 : isHov ? 2.5 : 0),
       weight: isSel ? 3 : 1.2,
@@ -368,7 +368,7 @@ function toggleCompare(code) {
   else { if (cmpCodes.length >= 4) cmpCodes.shift(); cmpCodes.push(code); }
   renderReport(selected);
 }
-const CMP_HUES = ['var(--accent)', 'var(--cool)', 'var(--warm)', '#a78bfa'];
+const CMP_HUES = ['#005EB8', '#009639', '#41B6E6', '#003087'];
 
 function buildCompareBlock() {
   if (!cmpCodes.length) return '';
@@ -695,7 +695,7 @@ function renderReport(code) {
       const years = pts.map((p, i) => ({ p, i }))
         .filter(({ p }) => p.ym.endsWith('-01'))
         .map(({ p, i }) => `<text x="${xs(i).toFixed(1)}" y="${H2 - 4}" font-size="8"
-          fill="#5c6a82" text-anchor="middle">${p.ym.slice(2, 4)}</text>`).join('');
+          fill="#768692" text-anchor="middle">${p.ym.slice(2, 4)}</text>`).join('');
       sparkMeta = { pts };
       // mark the selected period on the timeline
       const selPt = selPeriod ? pts.find(p => p.ym === selPeriod) : pts[pts.length - 1];
@@ -703,11 +703,11 @@ function renderReport(code) {
         r="4.6" fill="none" stroke="var(--warm)" stroke-width="2"/>` : '';
       sparkSvg = `<div class="tr-sparkwrap"><svg class="tr-spark" viewBox="0 0 ${W2} ${H2}" role="img"
         aria-label="Monthly share seen within four hours, ${pts[0].ym} to ${pts[pts.length-1].ym}: started near ${pts[0].v.toFixed(0)} percent, now about ${pts[pts.length-1].v.toFixed(0)} percent. Touch or hover any point for that month's details.">
-        <line x1="${padL}" x2="${W2-padL}" y1="${yLine}" y2="${yLine}" stroke="#fbbf24" stroke-dasharray="4 4" opacity=".8"/>
-        <path d="${path}" fill="none" stroke="#5eead4" stroke-width="2"/>
-        <circle cx="${xs(pts.length-1).toFixed(1)}" cy="${ys(pts[pts.length-1]).toFixed(1)}" r="3.4" fill="#5eead4"/>
+        <line x1="${padL}" x2="${W2-padL}" y1="${yLine}" y2="${yLine}" stroke="#41B6E6" stroke-dasharray="4 4" opacity=".8"/>
+        <path d="${path}" fill="none" stroke="#005EB8" stroke-width="2"/>
+        <circle cx="${xs(pts.length-1).toFixed(1)}" cy="${ys(pts[pts.length-1]).toFixed(1)}" r="3.4" fill="#005EB8"/>
         ${selMark}
-        <circle class="pt-hl" r="4" fill="#ffffff" stroke="#5eead4" stroke-width="2" opacity="0"/>
+        <circle class="pt-hl" r="4" fill="#FFFFFF" stroke="#005EB8" stroke-width="2" opacity="0"/>
         ${years}
         ${pts.map((p, i) => `<circle class="tr-pt" data-i="${i}" data-ym="${p.ym}" cx="${xs(i).toFixed(1)}" cy="${ys(p).toFixed(1)}" r="7" fill="transparent"/>`).join('')}
       </svg><div class="tr-tip" hidden></div></div>`;
@@ -747,12 +747,12 @@ function renderReport(code) {
   /* --- data-quality status for the current view --- */
   const dq = (() => {
     if (monthMode) {
-      if (!rec) return { cls: 'warn', icon: '⚠', text: `no report published for this trust in ${C.monthLabel(selPeriod)}` };
-      if (!rec.cov) return { cls: 'warn', icon: '⚠', text: 'attendance counts only — waits not published this month' };
+      if (!rec) return { cls: 'warn', icon: '!', text: `no report published for this trust in ${C.monthLabel(selPeriod)}` };
+      if (!rec.cov) return { cls: 'warn', icon: '!', text: 'attendance counts only — waits not published this month' };
       return { cls: 'ok', icon: '●', text: 'complete report' };
     }
     return t.months >= 12 ? { cls: 'ok', icon: '●', text: 'complete window' }
-      : { cls: 'warn', icon: '⚠', text: `${t.months} of 12 recent reporting periods available` };
+      : { cls: 'warn', icon: '!', text: `${t.months} of 12 recent reporting periods available` };
   })();
   const dqPill = `<span class="dq ${dq.cls}" title="${dq.text}"><span aria-hidden="true">${dq.icon}</span> <span class="sr-only">Data status: </span>${dq.text}</span>`;
 
@@ -880,10 +880,10 @@ function renderReport(code) {
 
   /* actions: export + share */
   const actionsHtml = `<div class="tr-actions">
-    <button class="linklike" id="tr-csv" type="button">⬇ CSV</button>
-    <button class="linklike" id="tr-share" type="button">🖼 share card (PNG)</button>
-    <button class="linklike" id="tr-copy" type="button">🔗 copy link</button>
-    <button class="linklike" id="tr-print" type="button">🖨 print / PDF</button>
+     <button class="linklike" id="tr-csv" type="button">Download CSV</button>
+     <button class="linklike" id="tr-share" type="button">Share card (PNG)</button>
+     <button class="linklike" id="tr-copy" type="button">Copy link</button>
+     <button class="linklike" id="tr-print" type="button">Print / PDF</button>
   </div>`;
 
   /* assemble */
@@ -985,14 +985,14 @@ function renderReport(code) {
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
       shareBtn.textContent = '⏳ rendering…';
-      renderShareCard(code, () => { shareBtn.textContent = '🖼 share card (PNG)'; });
+      renderShareCard(code, () => { shareBtn.textContent = 'Share card (PNG)'; });
     });
   }
   const copyBtn = document.getElementById('tr-copy');
   if (copyBtn) copyBtn.addEventListener('click', async () => {
     const url = location.origin + location.pathname + C.buildHash(code, selPeriod);
     try { await navigator.clipboard.writeText(url); copyBtn.textContent = '✓ copied';
-      setTimeout(() => { copyBtn.textContent = '🔗 copy link'; }, 1600); }
+      setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1600); }
     catch (e) { window.prompt('Copy this link:', url); }
   });
   const printBtn = document.getElementById('tr-print');
@@ -1104,8 +1104,8 @@ function buildShareSvg(code) {
   const dEng = perf != null && engP != null ? perf - engP : null;
   // hex mirrors of the site tokens — SVG rasterised via <img> cannot read
   // CSS custom properties
-  const P = { bg: '#07090e', line: '#2b3648', dim: '#5c6a82', muted: '#9aa7bd',
-              ink: '#e8edf6', accent: '#5eead4', warm: '#fbbf24', hot: '#fb7185' };
+  const P = { bg: '#FFFFFF', line: '#E8EDEE', dim: '#768692', muted: '#425563',
+              ink: '#231F20', accent: '#005EB8', warm: '#41B6E6', hot: '#003087' };
   const W = 1200, H = 630;
 
   const nameLines = wrapFor(t.name, 34).slice(0, 2);

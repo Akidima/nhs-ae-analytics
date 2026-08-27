@@ -282,7 +282,7 @@ function insights(code) {
   }
   if (t.dta != null && t.adm != null && t.adm > 0) {
     const share = 100 * t.dta / t.adm;
-    out.push({ tone: share >= 8 ? 'hot' : 'watch', icon: '⏱',
+      out.push({ tone: share >= 8 ? 'hot' : 'watch', icon: '!',
       text: `In the ${winLabel}, there were ${fmt(t.dta)} occasions where a patient waited 12+ hours on a trolley after a decision to admit — ` +
         `about ${share.toFixed(1)}% of emergency admissions involved such a wait first.` });
   }
@@ -374,49 +374,49 @@ const MAP_METRICS = {
   type: { label: 'Trust type', buckets: null },
   w4pct: { label: 'Left within 4 hours (%)', buckets: [
     { max: 60, color: 'var(--hot)', label: 'under 60%' },
-    { max: 70, color: '#fb923c', label: '60–69%' },
+     { max: 70, color: '#41B6E6', label: '60–69%' },
     { max: 80, color: 'var(--warm)', label: '70–79%' },
     { max: 95, color: 'var(--cool)', label: '80–94%' },
     { max: Infinity, color: 'var(--accent)', label: '95%+' }] },
   chg: { label: 'Change vs previous period', buckets: [
-    { max: -5, color: '#be123c', label: 'fell 5pp+' },
-    { max: -1, color: 'rgba(251,113,133,.55)', label: 'fell 1–5pp' },
-    { max: 1, color: '#94a3b8', label: 'flat ±1pp' },
-    { max: 5, color: 'rgba(94,234,212,.55)', label: 'rose 1–5pp' },
+     { max: -5, color: '#003087', label: 'fell 5pp+' },
+     { max: -1, color: '#41B6E6', label: 'fell 1–5pp' },
+     { max: 1, color: '#768692', label: 'flat ±1pp' },
+     { max: 5, color: '#009639', label: 'rose 1–5pp' },
     { max: Infinity, color: 'var(--accent)', label: 'rose 5pp+' }] },
   dta: { label: 'Trolley waits 12h+', buckets: [
-    { max: 0, color: '#334155', label: 'none published' },
-    { max: 1000, color: 'rgba(251,113,133,.35)', label: 'under 1K / yr' },
-    { max: 5000, color: 'rgba(251,113,133,.6)', label: '1–5K / yr' },
-    { max: 15000, color: 'var(--hot)', label: '5–15K / yr' },
-    { max: Infinity, color: '#be123c', label: 'over 15K / yr' }],
+     { max: 0, color: '#768692', label: 'none published' },
+     { max: 1000, color: '#41B6E6', label: 'under 1K / yr' },
+     { max: 5000, color: '#41B6E6', label: '1–5K / yr' },
+     { max: 15000, color: '#003087', label: '5–15K / yr' },
+     { max: Infinity, color: '#003087', label: 'over 15K / yr' }],
     bucketsM: [
-    { max: 0, color: '#334155', label: 'none published' },
-    { max: 250, color: 'rgba(251,113,133,.35)', label: 'under 250 / mo' },
-    { max: 1000, color: 'rgba(251,113,133,.6)', label: '250–1K / mo' },
-    { max: 3000, color: 'var(--hot)', label: '1–3K / mo' },
-    { max: Infinity, color: '#be123c', label: 'over 3K / mo' }] },
+     { max: 0, color: '#768692', label: 'none published' },
+     { max: 250, color: '#41B6E6', label: 'under 250 / mo' },
+     { max: 1000, color: '#41B6E6', label: '250–1K / mo' },
+     { max: 3000, color: '#003087', label: '1–3K / mo' },
+     { max: Infinity, color: '#003087', label: 'over 3K / mo' }] },
   att: { label: 'Total arrivals', buckets: [
-    { max: 50000, color: 'rgba(125,211,252,.45)', label: 'under 50K / yr' },
-    { max: 150000, color: 'rgba(125,211,252,.7)', label: '50–150K / yr' },
+     { max: 50000, color: '#41B6E6', label: 'under 50K / yr' },
+     { max: 150000, color: '#41B6E6', label: '50–150K / yr' },
     { max: 300000, color: 'var(--cool)', label: '150–300K / yr' },
     { max: 500000, color: 'var(--warm)', label: '300–500K / yr' },
     { max: Infinity, color: 'var(--accent)', label: 'over 500K / yr' }],
     bucketsM: [
-    { max: 20000, color: 'rgba(125,211,252,.45)', label: 'under 20K / mo' },
-    { max: 35000, color: 'rgba(125,211,252,.7)', label: '20–35K / mo' },
+     { max: 20000, color: '#41B6E6', label: 'under 20K / mo' },
+     { max: 35000, color: '#41B6E6', label: '20–35K / mo' },
     { max: 45000, color: 'var(--cool)', label: '35–45K / mo' },
     { max: Infinity, color: 'var(--accent)', label: 'over 45K / mo' }] },
   adm: { label: 'Admissions', buckets: [
-    { max: 20000, color: 'rgba(167,139,250,.4)', label: 'under 20K / yr' },
-    { max: 50000, color: 'rgba(167,139,250,.65)', label: '20–50K / yr' },
-    { max: 90000, color: '#a78bfa', label: '50–90K / yr' },
-    { max: Infinity, color: '#7c3aed', label: 'over 90K / yr' }],
+     { max: 20000, color: '#41B6E6', label: 'under 20K / yr' },
+     { max: 50000, color: '#41B6E6', label: '20–50K / yr' },
+     { max: 90000, color: '#005EB8', label: '50–90K / yr' },
+     { max: Infinity, color: '#003087', label: 'over 90K / yr' }],
     bucketsM: [
-    { max: 4000, color: 'rgba(167,139,250,.4)', label: 'under 4K / mo' },
-    { max: 8000, color: 'rgba(167,139,250,.65)', label: '4–8K / mo' },
-    { max: 14000, color: '#a78bfa', label: '8–14K / mo' },
-    { max: Infinity, color: '#7c3aed', label: 'over 14K / mo' }] }
+     { max: 4000, color: '#41B6E6', label: 'under 4K / mo' },
+     { max: 8000, color: '#41B6E6', label: '4–8K / mo' },
+     { max: 14000, color: '#005EB8', label: '8–14K / mo' },
+     { max: Infinity, color: '#003087', label: 'over 14K / mo' }] }
 };
 
 /* 4-hour performance change vs the previous comparable period for one trust:
@@ -461,14 +461,14 @@ function mapMetricColor(metric, code, ym) {
   const b = mapMetricBuckets(metric, !!ym);
   if (!b) return null;
   const v = mapMetricValue(metric, code, ym);
-  if (v == null) return '#475569';
+  if (v == null) return '#768692';
   return b.find(x => v <= x.max).color;
 }
 function mapMetricColor(metric, code) {
   const def = MAP_METRICS[metric];
   if (!def || !def.buckets) return null;
   const v = mapMetricValue(metric, code);
-  if (v == null) return '#475569';
+  if (v == null) return '#768692';
   return def.buckets.find(b => v <= b.max).color;
 }
 
