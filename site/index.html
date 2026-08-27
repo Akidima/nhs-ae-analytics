@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="An interactive, plain-English story of 11 years of NHS A&E data — 261.8 million attendances, the 4-hour wait, and the trolley waits nobody talks about.">
-<link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin>
-<link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossorigin>
+<link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
 <link rel="preload" as="style" href="vendor/leaflet.css">
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nhsuk-frontend@9.0.0/dist/nhsuk-frontend.min.css">
@@ -867,6 +866,7 @@ html:not(.light) .trust-side,html:not(.light) .trust-report{background:#231f20!i
 html:not(.light) .t-item{color:#fff!important;border-color:#768692!important}
 html:not(.light) .t-item.sel{background:#425563!important;border-color:#41b6e6!important}
 html:not(.light) .map-stage,html:not(.light) #ukmap{background:#425563!important}
+html:not(.light) .leaflet-tile-pane{filter:invert(90%) hue-rotate(180deg) saturate(.65)}
 html:not(.light) .map-by,html:not(.light) .map-legend{background:#231f20!important;border-color:#768692!important}
 html:not(.light) .tr-stat.good,html:not(.light) .tr-stat.hot,html:not(.light) .dq.ok,html:not(.light) .dq.warn{border-color:#009639!important}
 html:not(.light) .tr-stat.good .v,html:not(.light) .dq.ok{color:#009639!important}
@@ -1468,6 +1468,6 @@ html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;ba
 <script src="data/uk_geo.js?v=17" defer></script>
 <script src="data/trust_hist.js?v=17" defer></script>
 <script src="data-core.js?v=25" defer></script>
-<script src="map.js?v=25" defer></script>
+<script src="map.js?v=26" defer></script>
 </body>
 </html>
