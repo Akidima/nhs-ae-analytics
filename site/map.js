@@ -187,18 +187,41 @@ const BASE = {
   light: { base: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
            labels: 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png' }
 };
+const FALLBACK = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 function isLight() { return document.documentElement.classList.contains('light'); }
+let labelLayer;
 let baseLayer = L.tileLayer(BASE[isLight() ? 'light' : 'dark'].base, {
   subdomains: 'abcd', maxZoom: 9,
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 
-let labelLayer = L.tileLayer(BASE[isLight() ? 'light' : 'dark'].labels, {
+// CARTO is keyless, but keep the map usable if a tile edge or rate limit
+// returns an API-key response. The accessible trust list remains the source
+// of truth while the fallback layer loads.
+let fallbackActive = false;
+let tileFailures = 0;
+const fallbackLayer = L.tileLayer(FALLBACK, {
+  maxZoom: 9,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+});
+baseLayer.on('tileerror', () => {
+  tileFailures++;
+  if (tileFailures < 2 || fallbackActive) return;
+  fallbackActive = true;
+  map.removeLayer(baseLayer);
+  map.removeLayer(labelLayer);
+  fallbackLayer.addTo(map);
+  const hint = document.getElementById('map-hint');
+  if (hint) hint.textContent = 'OpenStreetMap base map · trust data remains available in the list';
+});
+
+labelLayer = L.tileLayer(BASE[isLight() ? 'light' : 'dark'].labels, {
   subdomains: 'abcd', maxZoom: 9, pane: 'aeLabels', opacity: .82, interactive: false
 }).addTo(map);
 
 // theme flips swap the basemap and repaint markers to stay legible
 window.addEventListener('ae-theme', () => {
+  if (fallbackActive) return;
   const set = BASE[isLight() ? 'light' : 'dark'];
   baseLayer.setUrl(set.base);
   labelLayer.setUrl(set.labels);
@@ -305,6 +328,7 @@ function applyMarkerStates() {
       fillColor: color,
       fillOpacity: isSel ? 1 : mapMetric === 'type' && t.kind !== 'major' ? .5 : .78
     });
+    if (m._path) m._path.classList.toggle('ae-marker-selected', isSel);
     if (isSel) m.bringToFront();
   });
 }
