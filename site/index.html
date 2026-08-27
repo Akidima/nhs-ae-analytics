@@ -904,13 +904,21 @@ html:not(.light) .trust-table-panel button{color:#41b6e6}
 html:not(.light) .metric-provenance{background:#425563;color:#fff;border-color:#41b6e6}
 html:not(.light) .map-status{background:#231f20;color:#fff;border-color:#41b6e6}
 @media (max-width:760px){.site-nav{gap:8px}.site-nav a{font-size:14px}.brand-title{display:none}}
+.site-head{height:52px;background:rgba(var(--wash),.82)!important;border-bottom:1px solid var(--line)!important;backdrop-filter:blur(10px)}
+.site-head-row{max-width:1060px;padding:0 24px}
+.brand-title{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)!important}
+.brand-title b{color:var(--ink)!important}
+.nhs-lozenge rect{fill:#005EB8!important}.nhs-lozenge text{fill:#FFFFFF!important}
+#theme-toggle{width:36px;height:36px;border-radius:10px!important;border:1px solid var(--line2);background:transparent!important;color:var(--muted);transition:color .2s,border-color .2s}
+html:not(.light) #theme-toggle,html.light #theme-toggle{color:var(--muted);border-color:var(--line2);background:transparent!important}
+html:not(.light) .site-head{background:rgba(var(--wash),.82)!important;border-bottom-color:var(--line)!important}
 </style>
 </head>
 <body>
 <div id="progress" role="presentation"></div>
 <a class="nhsuk-skip-link" href="#main-content">Skip to main content</a>
-<header class="site-head nhsuk-header">
-  <div class="site-head-row nhsuk-header__container nhsuk-width-container">
+<header class="site-head">
+  <div class="site-head-row">
     <a class="brand" href="#hero" aria-label="NHS — back to top">
       <svg class="nhs-lozenge" width="60" height="24" viewBox="0 0 60 24" role="img" aria-label="NHS">
         <rect width="60" height="24" rx="3" fill="#005EB8"/>
@@ -919,11 +927,6 @@ html:not(.light) .map-status{background:#231f20;color:#fff;border-color:#41b6e6}
       </svg>
       <span class="brand-title"><b>A&amp;E</b> · eleven years in the waiting room</span>
     </a>
-    <nav class="site-nav" aria-label="Primary navigation">
-      <a href="#patterns">National picture</a>
-      <a href="#explore">Explore trusts</a>
-      <a href="#method">Data and methodology</a>
-    </nav>
 <button id="theme-toggle" type="button" aria-label="Switch theme"></button>
   </div>
 </header>
