@@ -4,10 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="An interactive, plain-English story of 11 years of NHS A&E data — 261.8 million attendances, the 4-hour wait, and the trolley waits nobody talks about.">
+<meta name="theme-color" content="#005EB8">
+<meta property="og:title" content="Eleven Years in the Waiting Room — NHS A&E data">
+<meta property="og:description" content="An independent analysis of NHS England A&E attendance and waiting-time statistics.">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://akidima.github.io/nhs-ae-analytics/">
 <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
 <link rel="preload" as="style" href="vendor/leaflet.css">
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nhsuk-frontend@9.0.0/dist/nhsuk-frontend.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nhsuk-frontend@10.6.0/dist/nhsuk/nhsuk-frontend.min.css">
 <title>Eleven Years in the Waiting Room — the NHS A&E story in data</title>
 <script>/* apply saved/system theme before first paint */
 try{var t=localStorage.getItem('ae-theme');var sys=matchMedia('(prefers-color-scheme: light)').matches;
@@ -879,10 +884,31 @@ html:not(.light) .finding.f5::before{background:#41b6e6!important}
 html:not(.light) #ticker{background:#425563!important;border-color:#768692!important}
 html:not(.light) #theme-toggle{display:block!important;color:#fff;border-color:#fff;background:#003087}
 html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;background:#005eb8}
+.site-nav{display:flex;gap:20px;margin-left:auto;align-items:center}
+.site-nav a{color:#fff!important;font-size:16px;text-decoration:underline}
+.trust-table-toggle{margin-top:15px;width:100%;font-size:16px!important}
+.trust-table-panel{margin-top:25px;border:1px solid #768692;background:#fff;overflow-x:auto;padding:20px}
+.trust-table-panel table{border-collapse:collapse;width:100%;font-size:16px}
+.trust-table-panel caption{text-align:left;font-weight:700;font-size:22px;margin-bottom:15px}
+.trust-table-panel th,.trust-table-panel td{padding:10px 12px;border-bottom:1px solid #768692;text-align:left;vertical-align:top}
+.trust-table-panel th{background:#e8edee;font-weight:700}
+.trust-table-panel button{background:none;border:0;color:#005eb8;text-decoration:underline;font:inherit;text-align:left;padding:0;cursor:pointer}
+.metric-provenance{border-left:4px solid #005eb8;background:#e8edee;color:#231f20;padding:12px 15px;margin:15px 0;font-size:16px;line-height:1.45}
+.metric-provenance strong{font-weight:700}
+.map-status{position:absolute;left:15px;right:15px;top:75px;z-index:501;background:#fff;border:4px solid #003087;color:#231f20;padding:12px;font-size:16px;line-height:1.4}
+html:not(.light) .site-nav a{color:#fff!important}
+html:not(.light) .trust-table-panel{background:#231f20;color:#fff;border-color:#768692}
+html:not(.light) .trust-table-panel th{background:#425563;color:#fff}
+html:not(.light) .trust-table-panel th,html:not(.light) .trust-table-panel td{border-color:#768692}
+html:not(.light) .trust-table-panel button{color:#41b6e6}
+html:not(.light) .metric-provenance{background:#425563;color:#fff;border-color:#41b6e6}
+html:not(.light) .map-status{background:#231f20;color:#fff;border-color:#41b6e6}
+@media (max-width:760px){.site-nav{gap:8px}.site-nav a{font-size:14px}.brand-title{display:none}}
 </style>
 </head>
 <body>
 <div id="progress" role="presentation"></div>
+<a class="nhsuk-skip-link" href="#main-content">Skip to main content</a>
 <header class="site-head nhsuk-header">
   <div class="site-head-row nhsuk-header__container nhsuk-width-container">
     <a class="brand" href="#hero" aria-label="NHS — back to top">
@@ -893,12 +919,17 @@ html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;ba
       </svg>
       <span class="brand-title"><b>A&amp;E</b> · eleven years in the waiting room</span>
     </a>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a href="#patterns">National picture</a>
+      <a href="#explore">Explore trusts</a>
+      <a href="#method">Data and methodology</a>
+    </nav>
 <button id="theme-toggle" type="button" aria-label="Switch theme"></button>
   </div>
 </header>
 <div id="glow" role="presentation"></div>
 <div id="tip" role="status" aria-live="polite"></div>
-<main>
+<main id="main-content">
 
 <!-- ══════════════════ HERO ══════════════════ -->
 <section id="hero" aria-label="Introduction">
@@ -1249,17 +1280,20 @@ html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;ba
         <ul class="trust-list" id="trust-list" role="listbox" aria-label="NHS trusts">
           <!-- populated by script -->
         </ul>
+        <button class="nhsuk-button trust-table-toggle" id="trust-table-toggle" type="button"
+          aria-expanded="false" aria-controls="trust-table-panel">View trusts as a table</button>
       </div>
 
       <!-- middle: Leaflet map -->
       <div class="map-stage" id="map-stage">
-        <div id="ukmap" role="application"
+        <div id="ukmap" role="region" tabindex="0"
           aria-label="Interactive map of the UK showing NHS trusts. Use the list beside the map to select a trust."></div>
         <div class="map-by">
           <label class="map-by-label" for="map-by">Map by</label>
          <select id="map-by" class="nhsuk-select" aria-label="Colour the map by metric"></select>
         </div>
         <div class="map-legend" id="map-legend" aria-live="polite"></div>
+        <div class="map-status" id="map-status" role="status" hidden></div>
         <div class="map-hint" id="map-hint">drag to pan · scroll to zoom · click a marker — markers show whole-trust totals at HQ postcodes</div>
         <button class="map-reset" id="map-reset" title="Reset view" aria-label="Reset map view">⌂</button>
       </div>
@@ -1269,6 +1303,7 @@ html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;ba
         <div class="tr-body" id="tr-body"></div>
       </aside>
     </div>
+    <div id="trust-table-panel" class="trust-table-panel" hidden aria-live="polite"></div>
   </div>
 </section>
 
@@ -1403,6 +1438,7 @@ html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;ba
 <footer id="method" class="nhsuk-footer" aria-labelledby="m-h">
   <div class="wrap">
     <p class="sect-label">Where this comes from</p>
+    <p class="note ownership-note"><strong>Independent analysis:</strong> this is not an NHS England service and does not provide medical advice. It analyses publicly available NHS England statistics.</p>
     <div class="method-grid">
       <div>
         <h4>The source</h4>
@@ -1468,6 +1504,6 @@ html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;ba
 <script src="data/uk_geo.js?v=17" defer></script>
 <script src="data/trust_hist.js?v=17" defer></script>
 <script src="data-core.js?v=25" defer></script>
-<script src="map.js?v=26" defer></script>
+<script src="map.js?v=27" defer></script>
 </body>
 </html>

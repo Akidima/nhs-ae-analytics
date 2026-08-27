@@ -88,6 +88,9 @@ window.addEventListener('popstate', e => {
 const listEl = document.getElementById('trust-list');
 const searchEl = document.getElementById('trust-search');
 const countEl = document.getElementById('trust-count');
+const tablePanel = document.getElementById('trust-table-panel');
+const tableToggle = document.getElementById('trust-table-toggle');
+const mapStatus = document.getElementById('map-status');
 countEl.textContent = `(${P.filter(p => p.att > 0).length})`;
 
 function perfLabel(t) {
@@ -95,12 +98,32 @@ function perfLabel(t) {
   const pct = Math.round(100 * t.w4 / t.attCov);
   return `${pct}% within 4h`;
 }
+function renderTable(filter) {
+  if (!tablePanel) return;
+  const q = (filter || '').trim().toLowerCase();
+  const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q))
+    && (!regionFilter || p.region === regionFilter) && p.att > 0);
+  tablePanel.innerHTML = `<table><caption>Trusts matching this search (${rows.length})</caption>
+    <thead><tr><th scope="col">Trust</th><th scope="col">Region</th><th scope="col">Attendances</th>
+    <th scope="col">Within 4 hours</th><th scope="col">Action</th></tr></thead><tbody>${
+      rows.map(p => {
+        const t = C.BY_CODE.get(p[0]);
+        return `<tr><th scope="row">${p[1]}<br><small>${p[0]}</small></th>
+          <td>${t.region || 'Not available'}</td><td class="num">${C.fmtShort(p[3])}</td>
+          <td>${perfLabel(t)}</td><td><button type="button" data-table-code="${p[0]}">Open report</button></td></tr>`;
+      }).join('')}</tbody></table>`;
+  tablePanel.querySelectorAll('[data-table-code]').forEach(button => button.addEventListener('click', () => {
+    interacted = true;
+    select(button.dataset.tableCode);
+  }));
+}
 function renderList(filter) {
   const q = (filter || '').trim().toLowerCase();
   const rows = P.filter(p => (!q || p.name.toLowerCase().includes(q))
     && (!regionFilter || p.region === regionFilter) && p.att > 0);
   if (!rows.length) {
     listEl.innerHTML = '<li class="no-match">No trusts match that search.</li>';
+    renderTable(filter);
     return;
   }
   const frag = document.createDocumentFragment();
@@ -120,6 +143,17 @@ function renderList(filter) {
   });
   listEl.innerHTML = '';
   listEl.appendChild(frag);
+  renderTable(filter);
+}
+
+if (tableToggle && tablePanel) {
+  tableToggle.addEventListener('click', () => {
+    const open = tablePanel.hidden;
+    tablePanel.hidden = !open;
+    tableToggle.setAttribute('aria-expanded', String(open));
+    tableToggle.textContent = open ? 'Hide trusts table' : 'View trusts as a table';
+    if (open) renderTable(searchEl.value);
+  });
 }
 
 /* ── regional map filter ── */
@@ -210,7 +244,11 @@ baseLayer.on('tileerror', () => {
   if (labelLayer) map.removeLayer(labelLayer);
   fallbackLayer.addTo(map);
   const hint = document.getElementById('map-hint');
-  if (hint) hint.textContent = 'OpenStreetMap base map · trust data remains available in the list';
+  if (hint) hint.textContent = 'Map background unavailable · trust data remains available in the list';
+  if (mapStatus) {
+    mapStatus.hidden = false;
+    mapStatus.textContent = 'The map background is temporarily unavailable. Use the trust list or table below instead.';
+  }
 });
 
 // theme flips swap the basemap and repaint markers to stay legible
@@ -894,7 +932,12 @@ function renderReport(code) {
       percentages are computed at full precision.</li>
     <li><b>Limitations:</b> the 4-hour clock runs from arrival to departure, including waits after a decision to admit;
       these figures measure waits, not outcomes; organisations sometimes merge or rename (history stays attached by code).</li>
-  </ul></details>`;
+   </ul></details>`;
+  const provenanceHtml = `<div class="metric-provenance" role="note"><strong>How to read this report:</strong>
+    ${monthMode ? `Reporting month: ${C.monthLabel(selPeriod)}.` : `Reporting basis: ${cyMode ? `calendar year ${CY}` : `rolling ${t.months} reported months`}.`}
+    Waiting-time rates use covered attendances only. Waiting-time detail is published for
+    <strong>${pubMonths} of ${totMonths}</strong> months in this trust archive. Missing figures are shown as unavailable,
+    never estimated.</div>`;
 
   /* actions: export + share */
   const actionsHtml = `<div class="tr-actions">
@@ -913,6 +956,7 @@ function renderReport(code) {
     <div class="tr-name">${t.name}</div>
     <div class="tr-window num">${kindName}${t.region ? ' · ' + t.region : ''} · ${headLabel}</div>
     ${dqPill}
+    ${provenanceHtml}
     ${!monthMode && hist ? `<div class="basis-toggle" role="group" aria-label="Reporting basis">
       <button type="button" class="bt-btn ${!cyMode ? 'on' : ''}" data-basis="roll"
         aria-pressed="${!cyMode}">Rolling 12m</button>
