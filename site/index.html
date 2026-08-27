@@ -11,7 +11,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nhsuk-frontend@9.0.0/dist/nhsuk-frontend.min.css">
 <title>Eleven Years in the Waiting Room — the NHS A&E story in data</title>
 <script>/* apply saved/system theme before first paint */
-try{document.documentElement.classList.add('light')}catch(e){}</script>
+try{var t=localStorage.getItem('ae-theme');var sys=matchMedia('(prefers-color-scheme: light)').matches;
+if(t==='light'||(!t&&sys))document.documentElement.classList.add('light')
+else document.documentElement.classList.remove('light')}catch(e){}</script>
 <script>/* fresh visits/reloads start at the hero — before anything paints.
    Trust hashes (#RRK) match no element id, so only real section anchors
    keep their native jump; manual restoration stops the UA mid-page reset */
@@ -22,12 +24,12 @@ document.documentElement.style.scrollBehavior='auto';scrollTo(0,0);
 document.documentElement.style.scrollBehavior=__sb||''}}catch(e){}</script>
 <style>
 :root{
-  --bg:#ffffff; --bg2:#e8edee; --panel:#ffffff;
-  --ink:#231f20; --muted:#425563; --dim:#768692;
-  --line:#e8edee; --line2:#768692;
-  --accent:#005eb8; --warm:#41b6e6; --hot:#003087; --cool:#009639;
-  --wash:255,255,255; --panel-wash:255,255,255; --mapbg:#e8edee;
-  --dot-rgb:0,94,184; --dotwarm-rgb:65,182,230;
+  --bg:#231f20; --bg2:#425563; --panel:#231f20;
+  --ink:#ffffff; --muted:#e8edee; --dim:#e8edee;
+  --line:#425563; --line2:#768692;
+  --accent:#41b6e6; --warm:#e8edee; --hot:#ffffff; --cool:#009639;
+  --wash:35,31,32; --panel-wash:35,31,32; --mapbg:#425563;
+  --dot-rgb:65,182,230; --dotwarm-rgb:232,237,238;
   --serif:Arial,sans-serif;
   --sans:Arial,sans-serif;
   --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
@@ -827,12 +829,54 @@ input,select{border:2px solid #425563!important;background:#fff!important;color:
 .hot,.cool,.warm{color:#003087!important}
 .hm-cell.b95,.hm-cell.b80,.hm-cell.b70,.hm-cell.b60,.hm-cell.bx{background:#005eb8!important}.hm-cell.miss{background:#e8edee!important}
 .hero-caveat{border-left-color:#41b6e6!important;color:#425563!important}
-#hero-canvas,#ecg-canvas,#glow,#theme-toggle{display:none!important}
+#hero-canvas,#ecg-canvas,#glow{display:none!important}
 #ticker{background:#e8edee!important;border-color:#768692!important}
 .tick-item,.hstat .k,.fact-tag,.note,.dl-note{color:#425563!important}
 .finding::before{background:#005eb8!important}.finding.f2::before,.finding.f3::before,.finding.f4::before,.finding.f5::before{background:#003087!important}
 .method-grid h4{font-family:Arial,sans-serif;font-size:19px;letter-spacing:0;text-transform:none}
 @media (max-width:640px){body{font-size:16px}h1{font-size:36px}h2{font-size:28px}h3{font-size:22px}}
+html:not(.light) body{background:#231f20;color:#fff}
+html:not(.light) .site-head{background:#003087!important;border-bottom-color:#005eb8}
+html:not(.light) .sect-alt,html:not(.light) #method{background:#425563!important}
+html:not(.light) .def,html:not(.light) .record,html:not(.light) .viz,html:not(.light) .finding,
+html:not(.light) .explorer-controls,html:not(.light) .caveats,html:not(.light) .s-call,
+html:not(.light) .tr-metric,html:not(.light) .tr-stat,html:not(.light) .j-step,
+html:not(.light) .f-proof .fp{background:#231f20!important;border-color:#768692!important}
+html:not(.light) a,html:not(.light) .linklike,html:not(.light) .gl,
+html:not(.light) .sect-label,html:not(.light) .hero-kicker,html:not(.light) .method-grid h4{color:#41b6e6!important}
+html:not(.light) .hero-sub,html:not(.light) .lede,html:not(.light) .note,
+html:not(.light) .chart-note,html:not(.light) .f-body,html:not(.light) .tr-note,
+html:not(.light) .method-grid p,html:not(.light) .method-grid li{color:#e8edee!important}
+html:not(.light) .hero-kicker::before,html:not(.light) .sect-label::after{background:#41b6e6!important}
+html:not(.light) .gauge{background:#231f20!important;border-color:#768692!important}
+html:not(.light) .g-track{stroke:#425563!important}.g-val{stroke:#41b6e6!important}
+html:not(.light) .g-target{stroke:#e8edee!important}
+html:not(.light) .g-num,html:not(.light) .hstat .v,html:not(.light) .big-stat .v,
+html:not(.light) .tr-name,html:not(.light) .record-head .who{color:#fff!important}
+html:not(.light) .callout,html:not(.light) .callout.warn,html:not(.light) .callout.hot{background:#425563!important;color:#fff!important;border-color:#41b6e6!important}
+html:not(.light) .callout.hot{border-left-color:#fff!important}
+html:not(.light) .nhsuk-button,html:not(.light) .dl-btn{background:#005eb8!important;color:#fff!important}
+html:not(.light) .nhsuk-button:hover,html:not(.light) .dl-btn:hover{background:#41b6e6!important;color:#231f20!important}
+html:not(.light) .seg button,html:not(.light) .bt-btn,html:not(.light) .map-reset,
+html:not(.light) .per-btn,html:not(.light) .bw-chip{background:#231f20!important;color:#41b6e6!important;border-color:#41b6e6!important}
+html:not(.light) .seg button[aria-pressed="true"],html:not(.light) .bt-btn.on{background:#005eb8!important;color:#fff!important;border-color:#005eb8!important}
+html:not(.light) input,html:not(.light) select{background:#231f20!important;color:#fff!important;border-color:#e8edee!important}
+html:not(.light) .trust-side,html:not(.light) .trust-report{background:#231f20!important}
+html:not(.light) .t-item{color:#fff!important;border-color:#768692!important}
+html:not(.light) .t-item.sel{background:#425563!important;border-color:#41b6e6!important}
+html:not(.light) .map-stage,html:not(.light) #ukmap{background:#425563!important}
+html:not(.light) .map-by,html:not(.light) .map-legend{background:#231f20!important;border-color:#768692!important}
+html:not(.light) .tr-stat.good,html:not(.light) .tr-stat.hot,html:not(.light) .dq.ok,html:not(.light) .dq.warn{border-color:#009639!important}
+html:not(.light) .tr-stat.good .v,html:not(.light) .dq.ok{color:#009639!important}
+html:not(.light) .tr-stat.hot .v,html:not(.light) .dq.warn{color:#fff!important}
+html:not(.light) .tick-item,html:not(.light) .hstat .k,html:not(.light) .fact-tag,
+html:not(.light) .note,html:not(.light) .dl-note{color:#e8edee!important}
+html:not(.light) .finding::before,html:not(.light) .finding.f2::before,
+html:not(.light) .finding.f3::before,html:not(.light) .finding.f4::before,
+html:not(.light) .finding.f5::before{background:#41b6e6!important}
+html:not(.light) #ticker{background:#425563!important;border-color:#768692!important}
+html:not(.light) #theme-toggle{display:block!important;color:#fff;border-color:#fff;background:#003087}
+html.light #theme-toggle{display:block!important;color:#fff;border-color:#fff;background:#005eb8}
 </style>
 </head>
 <body>
@@ -847,7 +891,7 @@ input,select{border:2px solid #425563!important;background:#fff!important;color:
       </svg>
       <span class="brand-title"><b>A&amp;E</b> · eleven years in the waiting room</span>
     </a>
-    <button id="theme-toggle" type="button" aria-label="Switch theme" hidden></button>
+<button id="theme-toggle" type="button" aria-label="Switch theme"></button>
   </div>
 </header>
 <div id="glow" role="presentation"></div>
